@@ -58,7 +58,11 @@ export default function Planner() {
     const dow = new Date(date + 'T00:00').getDay();
     return routines.filter(r => {
       if (r.date === date) return true;
-      if (r.repeat_type === 'daily') return !r.repeat_exceptions?.includes(date);
+      if (r.repeat_type === 'daily') {
+        // Check repeat_days if specified (allows excluding specific weekdays)
+        if (r.repeat_days && r.repeat_days.length > 0 && !r.repeat_days.includes(dow)) return false;
+        return !r.repeat_exceptions?.includes(date);
+      }
       if (r.repeat_type === 'weekly') return r.repeat_days?.includes(dow) && !r.repeat_exceptions?.includes(date);
       if (r.repeat_type === 'monthly') return new Date(date + 'T00:00').getDate() === 1;
       return false;
