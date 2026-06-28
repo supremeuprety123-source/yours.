@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { getAll, addRecord, updateRecord, removeRecord } from '../lib/store';
 import type { Routine, FocusSession, DiaryEntry, Chapter } from '../lib/types';
-import { todayISO, formatTime, formatDate, addDays } from '../lib/utils';
+import { todayISO, formatTime, formatDate, addDays, toLocalISO } from '../lib/utils';
 import Modal from '../components/Modal';
 import ConfirmDialog from '../components/ConfirmDialog';
 import EmptyState from '../components/EmptyState';
@@ -82,7 +82,7 @@ export default function Planner() {
   const weekData = Array.from({ length: 7 }).map((_, i) => {
     const d = new Date();
     d.setDate(d.getDate() - (6 - i));
-    const dateStr = d.toISOString().split('T')[0];
+    const dateStr = toLocalISO(d);
     const dayRoutines = getRoutinesForDate(dateStr);
     const dayDone = dayRoutines.filter(r => r.completed_dates?.includes(dateStr));
     const daySessions = sessions.filter(s => s.completed_at.startsWith(dateStr));
@@ -95,7 +95,7 @@ export default function Planner() {
   const monthData = Array.from({ length: 30 }).map((_, i) => {
     const d = new Date();
     d.setDate(d.getDate() - (29 - i));
-    const dateStr = d.toISOString().split('T')[0];
+    const dateStr = toLocalISO(d);
     const dayRoutines = getRoutinesForDate(dateStr);
     const dayDone = dayRoutines.filter(r => r.completed_dates?.includes(dateStr));
     const daySessions = sessions.filter(s => s.completed_at.startsWith(dateStr));
@@ -109,7 +109,7 @@ export default function Planner() {
   for (let i = 0; i < 365; i++) {
     const d = new Date();
     d.setDate(d.getDate() - i);
-    const dateStr = d.toISOString().split('T')[0];
+    const dateStr = toLocalISO(d);
     const dayRoutines = getRoutinesForDate(dateStr);
     const dayDone = dayRoutines.filter(r => r.completed_dates?.includes(dateStr));
     const daySessions = sessions.filter(s => s.completed_at.startsWith(dateStr));
@@ -209,7 +209,7 @@ export default function Planner() {
             {Array.from({ length: 7 }).map((_, i) => {
               const d = new Date();
               d.setDate(d.getDate() - d.getDay() + i);
-              const dateStr = d.toISOString().split('T')[0];
+              const dateStr = toLocalISO(d);
               const dayRoutines = getRoutinesForDate(dateStr);
               const dayDone = dayRoutines.filter(r => r.completed_dates?.includes(dateStr));
               const isToday = dateStr === todayISO();
@@ -353,16 +353,16 @@ function GoogleCalendarMonth({ routines, getRoutinesForDate, calendarDate, setCa
   for (let i = 0; i < firstDay; i++) {
     const day = prevMonthDays - firstDay + i + 1;
     const d = new Date(year, month - 1, day);
-    cells.push({ day, month: 'prev', dateStr: d.toISOString().split('T')[0] });
+    cells.push({ day, month: 'prev', dateStr: toLocalISO(d) });
   }
   for (let i = 1; i <= daysInMonth; i++) {
     const d = new Date(year, month, i);
-    cells.push({ day: i, month: 'curr', dateStr: d.toISOString().split('T')[0] });
+    cells.push({ day: i, month: 'curr', dateStr: toLocalISO(d) });
   }
   while (cells.length < 42) {
     const day = cells.length - daysInMonth - firstDay + 1;
     const d = new Date(year, month + 1, day);
-    cells.push({ day, month: 'next', dateStr: d.toISOString().split('T')[0] });
+    cells.push({ day, month: 'next', dateStr: toLocalISO(d) });
   }
 
   return (

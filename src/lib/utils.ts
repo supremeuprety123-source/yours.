@@ -35,6 +35,11 @@ export function formatDate(date: string | Date): string {
 
 export function todayISO(): string {
   const d = new Date();
+  return toLocalISO(d);
+}
+
+// Convert a Date to YYYY-MM-DD using LOCAL time (not UTC) — avoids timezone shifts
+export function toLocalISO(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 

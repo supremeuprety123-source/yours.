@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { getAll, addRecord, updateRecord, removeRecord } from '../lib/store';
 import type { DiaryEntry, LifeNote } from '../lib/types';
@@ -6,7 +6,7 @@ import { formatDate, todayISO } from '../lib/utils';
 import Modal from '../components/Modal';
 import ConfirmDialog from '../components/ConfirmDialog';
 import EmptyState from '../components/EmptyState';
-import { Plus, Edit2, Trash2, Pin, Search, BookHeart, StickyNote, Calendar } from 'lucide-react';
+import { Plus, Edit2, Trash2, Pin, Search, BookHeart, StickyNote, Calendar, Save } from 'lucide-react';
 
 type DiaryView = 'log' | 'notes';
 
@@ -149,9 +149,11 @@ function DailyLog({ entries, selectedDate, setSelectedDate, todayEntry, onChange
   const [learned, setLearned] = useState(todayEntry?.learned || '');
   const [planned, setPlanned] = useState(todayEntry?.planned || '');
   const [saved, setSaved] = useState(false);
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [dirty, setDirty] = useState(false);
   const entryId = useRef(todayEntry?.id || null);
+  const isSaving = useRef(false);
 
+  // Reset form when date changes or entry changes
   useEffect(() => {
     setMood(todayEntry?.mood || 3);
     setTags(todayEntry?.mental_tags || []);
@@ -160,14 +162,18 @@ function DailyLog({ entries, selectedDate, setSelectedDate, todayEntry, onChange
     setLearned(todayEntry?.learned || '');
     setPlanned(todayEntry?.planned || '');
     entryId.current = todayEntry?.id || null;
-  }, [todayEntry, selectedDate]);
+    setDirty(false);
+  }, [todayEntry?.id, selectedDate]);
 
-  // Auto-save
-  useEffect(() => {
-    if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(async () => {
-      if (!journal && !learned && !planned && mood === 3 && tags.length === 0 && rating === 3 && !todayEntry) return;
-      const data = { date: selectedDate, mood, mental_tags: tags, performance_rating: rating, journal_text: journal, learned, planned };
+  const doSave = useCallback(async () => {
+    if (isSaving.current) return;
+    // Don't save if nothing meaningful has been entered and no existing entry
+    if (!journal && !learned && !planned && mood === 3 && tags.length === 0 && rating === 3 && !entryId.current) {
+      return;
+    }
+    isSaving.current = true;
+    const data = { date: selectedDate, mood, mental_tags: tags, performance_rating: rating, journal_text: journal, learned, planned };
+    try {
       if (entryId.current) {
         await updateRecord('diary_entries', entryId.current, data);
       } else {
@@ -175,13 +181,38 @@ function DailyLog({ entries, selectedDate, setSelectedDate, todayEntry, onChange
         entryId.current = rec.id;
       }
       setSaved(true);
+      setDirty(false);
       setTimeout(() => setSaved(false), 2000);
       onChanged();
-    }, 15000);
-    return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
-  }, [mood, tags, rating, journal, learned, planned, selectedDate]);
+    } finally {
+      isSaving.current = false;
+    }
+  }, [selectedDate, mood, tags, rating, journal, learned, planned, onChanged]);
 
-  const toggleTag = (tag: string) => setTags(prev => prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]);
+  // Auto-save every 15 seconds if dirty
+  useEffect(() => {
+    if (!dirty) return;
+    const timer = setTimeout(() => {
+      doSave();
+    }, 15000);
+    return () => clearTimeout(timer);
+  }, [dirty, doSave]);
+
+  // Save on unmount (when navigating away)
+  useEffect(() => {
+    return () => {
+      if (dirty) {
+        doSave();
+      }
+    };
+  }, [dirty, doSave]);
+
+  const markDirty = () => { if (!dirty) setDirty(true); };
+
+  const toggleTag = (tag: string) => {
+    setTags(prev => prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]);
+    markDirty();
+  };
 
   // Mood calendar
   const now = new Date();
@@ -194,11 +225,20 @@ function DailyLog({ entries, selectedDate, setSelectedDate, todayEntry, onChange
 
   return (
     <div className="space-y-4">
-      {/* Date selector */}
-      <div className="flex items-center gap-3">
+      {/* Date selector + Save */}
+      <div className="flex items-center gap-3 flex-wrap">
         <Calendar size={18} className="text-[#C8A96E]" />
         <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="rounded-lg border border-zinc-700 bg-[#1A1A1A] px-3 py-1.5 text-sm text-zinc-200 outline-none focus:border-[#C8A96E]" />
+        <button
+          onClick={doSave}
+          className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+            dirty ? 'bg-[#C8A96E] text-black hover:bg-[#d4b87f]' : 'bg-zinc-800 text-zinc-500'
+          }`}
+        >
+          <Save size={13} /> Save
+        </button>
         {saved && <span className="text-xs text-[#4CAF7D]">Saved ✓</span>}
+        {dirty && <span className="text-xs text-[#E07B39]">Unsaved changes</span>}
         {todayEntry && <button onClick={() => onDelete(todayEntry)} className="ml-auto text-xs text-zinc-500 hover:text-[#C0392B]">Delete entry</button>}
       </div>
 
@@ -209,7 +249,7 @@ function DailyLog({ entries, selectedDate, setSelectedDate, todayEntry, onChange
             <label className="mb-2 block text-sm font-medium text-zinc-300">Mood</label>
             <div className="flex justify-between">
               {MOODS.map((emoji, i) => (
-                <button key={i} onClick={() => setMood(i + 1)} className={`flex flex-col items-center gap-1 rounded-xl p-2 transition-all ${mood === i + 1 ? 'bg-[#C8A96E]/10 scale-110' : ''}`}>
+                <button key={i} onClick={() => { setMood(i + 1); markDirty(); }} className={`flex flex-col items-center gap-1 rounded-xl p-2 transition-all ${mood === i + 1 ? 'bg-[#C8A96E]/10 scale-110' : ''}`}>
                   <span className="text-2xl">{emoji}</span>
                   <span className={`text-[9px] ${mood === i + 1 ? 'text-[#C8A96E]' : 'text-zinc-600'}`}>{MOOD_LABELS[i]}</span>
                 </button>
@@ -230,7 +270,7 @@ function DailyLog({ entries, selectedDate, setSelectedDate, todayEntry, onChange
             <label className="mb-2 block text-sm font-medium text-zinc-300">Performance Rating</label>
             <div className="flex gap-1">
               {[1,2,3,4,5].map(n => (
-                <button key={n} onClick={() => setRating(n)} className="text-2xl">
+                <button key={n} onClick={() => { setRating(n); markDirty(); }} className="text-2xl">
                   <span className={n <= rating ? 'text-[#C8A96E]' : 'text-zinc-700'}>★</span>
                 </button>
               ))}
@@ -242,17 +282,17 @@ function DailyLog({ entries, selectedDate, setSelectedDate, todayEntry, onChange
         <div className="rounded-2xl border border-zinc-800 bg-[#1A1A1A] p-5 space-y-3">
           <div>
             <label className="mb-1.5 block text-sm font-medium text-zinc-300">Journal</label>
-            <textarea value={journal} onChange={e => setJournal(e.target.value)} rows={4} placeholder="How was your day?" className="w-full rounded-xl border border-zinc-700 bg-[#0D0D0D] px-3 py-2.5 text-sm text-zinc-200 outline-none focus:border-[#C8A96E] resize-none" />
+            <textarea value={journal} onChange={e => { setJournal(e.target.value); markDirty(); }} rows={4} placeholder="How was your day?" className="w-full rounded-xl border border-zinc-700 bg-[#0D0D0D] px-3 py-2.5 text-sm text-zinc-200 outline-none focus:border-[#C8A96E] resize-none" />
           </div>
           <div>
             <label className="mb-1.5 block text-sm font-medium text-zinc-300">What I Learned</label>
-            <textarea value={learned} onChange={e => setLearned(e.target.value)} rows={2} placeholder="Today's key learning..." className="w-full rounded-xl border border-zinc-700 bg-[#0D0D0D] px-3 py-2.5 text-sm text-zinc-200 outline-none focus:border-[#C8A96E] resize-none" />
+            <textarea value={learned} onChange={e => { setLearned(e.target.value); markDirty(); }} rows={2} placeholder="Today's key learning..." className="w-full rounded-xl border border-zinc-700 bg-[#0D0D0D] px-3 py-2.5 text-sm text-zinc-200 outline-none focus:border-[#C8A96E] resize-none" />
           </div>
           <div>
             <label className="mb-1.5 block text-sm font-medium text-zinc-300">What I Planned</label>
-            <textarea value={planned} onChange={e => setPlanned(e.target.value)} rows={2} placeholder="Tomorrow's plan..." className="w-full rounded-xl border border-zinc-700 bg-[#0D0D0D] px-3 py-2.5 text-sm text-zinc-200 outline-none focus:border-[#C8A96E] resize-none" />
+            <textarea value={planned} onChange={e => { setPlanned(e.target.value); markDirty(); }} rows={2} placeholder="Tomorrow's plan..." className="w-full rounded-xl border border-zinc-700 bg-[#0D0D0D] px-3 py-2.5 text-sm text-zinc-200 outline-none focus:border-[#C8A96E] resize-none" />
           </div>
-          <p className="text-[10px] text-zinc-600 text-right">Auto-saves every 15 seconds</p>
+          <p className="text-[10px] text-zinc-600 text-right">Auto-saves every 15s · Click Save to save now</p>
         </div>
       </div>
 

@@ -30,12 +30,25 @@ function AppContent() {
 
   return (
     <Layout>
-      {activePage === 'home' && <Home />}
-      {activePage === 'study' && <Study />}
-      {activePage === 'planner' && <Planner />}
-      {activePage === 'finance' && <Finance />}
-      {activePage === 'diary' && <Diary />}
-      {activePage === 'settings' && <Settings />}
+      {/* Keep all pages mounted — hidden when inactive — so state (timer, text, etc.) is preserved */}
+      <div style={{ display: activePage === 'home' ? 'block' : 'none' }}>
+        <Home />
+      </div>
+      <div style={{ display: activePage === 'study' ? 'block' : 'none' }}>
+        <Study />
+      </div>
+      <div style={{ display: activePage === 'planner' ? 'block' : 'none' }}>
+        <Planner />
+      </div>
+      <div style={{ display: activePage === 'finance' ? 'block' : 'none' }}>
+        <Finance />
+      </div>
+      <div style={{ display: activePage === 'diary' ? 'block' : 'none' }}>
+        <Diary />
+      </div>
+      <div style={{ display: activePage === 'settings' ? 'block' : 'none' }}>
+        <Settings />
+      </div>
     </Layout>
   );
 }
