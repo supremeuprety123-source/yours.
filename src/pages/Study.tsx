@@ -16,12 +16,10 @@ export default function Study() {
   const [revisions, setRevisions] = useState<RevisionHistory[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Navigation state
   const [view, setView] = useState<'list' | 'paper' | 'chapter'>('list');
   const [selectedPaperId, setSelectedPaperId] = useState<string | null>(null);
   const [selectedChapterId, setSelectedChapterId] = useState<string | null>(null);
 
-  // Modals
   const [paperModal, setPaperModal] = useState(false);
   const [editingPaper, setEditingPaper] = useState<Paper | null>(null);
   const [chapterModal, setChapterModal] = useState(false);
@@ -39,9 +37,9 @@ export default function Study() {
       getAll<Lesson>('lessons'),
       getAll<RevisionHistory>('revision_history'),
     ]);
-    setPapers(p.sort((a,b) => a.number - b.number));
-    setChapters(c);
-    setLessons(l);
+    setPapers(p.sort((a, b) => a.number - b.number));
+    setChapters(c.sort((a, b) => (a.sort_order ?? 999) - (b.sort_order ?? 999)));
+    setLessons(l.sort((a, b) => (a.sort_order ?? 999) - (b.sort_order ?? 999)));
     setRevisions(r);
     setLoading(false);
   };
@@ -80,13 +78,14 @@ export default function Study() {
 
   // ─── CHAPTER DETAIL VIEW ───
   if (view === 'chapter' && selectedChapter) {
-    const chLessons = lessons.filter(l => l.chapter_id === selectedChapter.id);
-    const chRevisions = revisions.filter(r => r.chapter_id === selectedChapter.id).sort((a,b) => b.revised_at.localeCompare(a.revised_at));
+    const chLessons = lessons
+      .filter(l => l.chapter_id === selectedChapter.id)
+      .sort((a, b) => (a.sort_order ?? 999) - (b.sort_order ?? 999));
+    const chRevisions = revisions.filter(r => r.chapter_id === selectedChapter.id).sort((a, b) => b.revised_at.localeCompare(a.revised_at));
     const chScore = chapterProgressScore(selectedChapter);
 
     return (
       <div className="space-y-5">
-        {/* Breadcrumb */}
         <div className="flex items-center gap-2 text-sm">
           <button onClick={() => setView('list')} className="text-zinc-500 hover:text-zinc-300">Study</button>
           <ChevronRight size={14} className="text-zinc-700" />
@@ -95,7 +94,6 @@ export default function Study() {
           <span className="text-zinc-300">{selectedChapter.name}</span>
         </div>
 
-        {/* Chapter Header */}
         <div className="rounded-2xl border border-zinc-800 bg-[#1A1A1A] p-5">
           <div className="flex items-start justify-between gap-3">
             <div className="flex-1">
@@ -104,9 +102,9 @@ export default function Study() {
                   selectedChapter.status === 'completed' ? 'bg-[#4CAF7D]/10 text-[#4CAF7D]' :
                   selectedChapter.status === 'in_progress' ? 'bg-[#E07B39]/10 text-[#E07B39]' :
                   'bg-zinc-800 text-zinc-500'
-                }`}>{selectedChapter.status.replace('_',' ')}</span>
+                }`}>{selectedChapter.status.replace('_', ' ')}</span>
                 <div className="flex items-center gap-0.5">
-                  {Array.from({length:5}).map((_,i) => (
+                  {Array.from({ length: 5 }).map((_, i) => (
                     <Star key={i} size={12} className={i < selectedChapter.difficulty ? 'fill-[#C8A96E] text-[#C8A96E]' : 'text-zinc-700'} />
                   ))}
                 </div>
@@ -123,7 +121,6 @@ export default function Study() {
             </div>
           </div>
 
-          {/* Stats Grid */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
             <ChapterStat icon={<Circle size={14} />} label="Completion" value={`${selectedChapter.completion}%`} color="#C8A96E" />
             <ChapterStat icon={<Clock size={14} />} label="Time Spent" value={formatTime(selectedChapter.time_spent)} color="#E07B39" />
@@ -131,7 +128,6 @@ export default function Study() {
             <ChapterStat icon={<Award size={14} />} label="Marks" value={selectedChapter.marks_total > 0 ? `${selectedChapter.marks_obtained}/${selectedChapter.marks_total}` : '—'} color="#C8A96E" />
           </div>
 
-          {/* Completion Slider */}
           <div className="mt-4">
             <div className="flex items-center justify-between text-xs mb-1.5">
               <span className="text-zinc-500">Completion</span>
@@ -154,7 +150,6 @@ export default function Study() {
           )}
         </div>
 
-        {/* Lessons */}
         <div className="rounded-2xl border border-zinc-800 bg-[#1A1A1A] p-5">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-semibold text-zinc-300">Lessons ({chLessons.length})</h3>
@@ -164,11 +159,14 @@ export default function Study() {
             <p className="text-sm text-zinc-600 py-3">No lessons yet. Add your first lesson for this chapter.</p>
           ) : (
             <div className="space-y-2">
-              {chLessons.map(l => (
+              {chLessons.map((l, idx) => (
                 <div key={l.id} className="rounded-xl border border-zinc-800/50 bg-zinc-900/30 px-4 py-3">
                   <div className="flex items-center gap-3">
                     <div className={`flex h-7 w-7 items-center justify-center rounded-full ${l.completion >= 100 ? 'bg-[#4CAF7D]/10' : l.completion > 0 ? 'bg-[#E07B39]/10' : 'bg-zinc-800'}`}>
-                      {l.completion >= 100 ? <CheckCircle2 size={15} className="text-[#4CAF7D]" /> : <Circle size={15} className="text-zinc-500" />}
+                      {l.completion >= 100
+                        ? <CheckCircle2 size={15} className="text-[#4CAF7D]" />
+                        : <span className="text-[10px] font-bold text-zinc-500">{idx + 1}</span>
+                      }
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium text-zinc-200">{l.name}</div>
@@ -189,7 +187,6 @@ export default function Study() {
           )}
         </div>
 
-        {/* Revision History */}
         <div className="rounded-2xl border border-zinc-800 bg-[#1A1A1A] p-5">
           <h3 className="text-sm font-semibold text-zinc-300 mb-3">Revision History ({chRevisions.length})</h3>
           {chRevisions.length === 0 ? (
@@ -207,7 +204,6 @@ export default function Study() {
           )}
         </div>
 
-        {/* Modals */}
         {chapterModal && (
           <ChapterModal open={chapterModal} editing={editingChapter} paperId={editingChapter?.paper_id || chapterPaperId} onClose={() => setChapterModal(false)} onSaved={() => { setChapterModal(false); loadData(); refreshAll(); }} />
         )}
@@ -221,19 +217,19 @@ export default function Study() {
 
   // ─── PAPER DETAIL VIEW ───
   if (view === 'paper' && selectedPaper) {
-    const paperChapters = chapters.filter(c => c.paper_id === selectedPaper.id);
+    const paperChapters = chapters
+      .filter(c => c.paper_id === selectedPaper.id)
+      .sort((a, b) => (a.sort_order ?? 999) - (b.sort_order ?? 999));
     const score = paperProgressScore(paperChapters);
 
     return (
       <div className="space-y-5">
-        {/* Breadcrumb */}
         <div className="flex items-center gap-2 text-sm">
           <button onClick={() => setView('list')} className="text-zinc-500 hover:text-zinc-300">Study</button>
           <ChevronRight size={14} className="text-zinc-700" />
           <span className="text-zinc-300">{selectedPaper.name}</span>
         </div>
 
-        {/* Paper Header */}
         <div className="rounded-2xl border border-zinc-800 bg-[#1A1A1A] p-5">
           <div className="flex items-start justify-between gap-3">
             <div className="flex-1">
@@ -242,7 +238,7 @@ export default function Study() {
                 {selectedPaper.group && <span className="rounded-md bg-zinc-800 px-2 py-0.5 text-xs text-zinc-400">{selectedPaper.group}</span>}
               </div>
               <h2 className="text-xl font-bold text-zinc-100">{selectedPaper.name}</h2>
-              <p className="text-xs text-zinc-500 mt-1">ICAI CA {selectedPaper.level} · {paperChapters.length} chapters · {formatTime(paperChapters.reduce((s,c)=>s+c.time_spent,0))}</p>
+              <p className="text-xs text-zinc-500 mt-1">ICAI CA {selectedPaper.level} · {paperChapters.length} chapters · {formatTime(paperChapters.reduce((s, c) => s + c.time_spent, 0))}</p>
             </div>
             <div className="flex items-center gap-2">
               <div className="text-right">
@@ -255,7 +251,6 @@ export default function Study() {
           </div>
         </div>
 
-        {/* Chapters */}
         <div>
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-semibold text-zinc-300">Chapters</h3>
@@ -265,7 +260,7 @@ export default function Study() {
             <EmptyState icon={<BookOpen size={36} />} message="No chapters yet. Add your first chapter to start tracking progress." />
           ) : (
             <div className="space-y-2">
-              {paperChapters.map(ch => {
+              {paperChapters.map((ch, idx) => {
                 const chScore = chapterProgressScore(ch);
                 return (
                   <button
@@ -273,7 +268,10 @@ export default function Study() {
                     onClick={() => { setSelectedChapterId(ch.id); setView('chapter'); }}
                     className="w-full flex items-center gap-3 rounded-2xl border border-zinc-800 bg-[#1A1A1A] px-5 py-4 hover:border-[#C8A96E]/30 hover:bg-zinc-900/30 transition-all text-left"
                   >
-                    <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${
+                    <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-zinc-800 text-xs font-bold text-zinc-400 shrink-0">
+                      {ch.sort_order ?? idx + 1}
+                    </div>
+                    <div className={`flex h-10 w-10 items-center justify-center rounded-xl shrink-0 ${
                       ch.status === 'completed' ? 'bg-[#4CAF7D]/10' : ch.status === 'in_progress' ? 'bg-[#E07B39]/10' : 'bg-zinc-800'
                     }`}>
                       {ch.status === 'completed' ? <CheckCircle2 size={18} className="text-[#4CAF7D]" /> : <BookOpen size={18} className="text-zinc-500" />}
@@ -282,18 +280,18 @@ export default function Study() {
                       <div className="text-sm font-medium text-zinc-200">{ch.name}</div>
                       <div className="flex items-center gap-3 mt-0.5 text-[10px] text-zinc-500">
                         <span className="flex items-center gap-0.5">
-                          {Array.from({length:5}).map((_,i) => <Star key={i} size={8} className={i < ch.difficulty ? 'fill-[#C8A96E] text-[#C8A96E]' : 'text-zinc-700'} />)}
+                          {Array.from({ length: 5 }).map((_, i) => <Star key={i} size={8} className={i < ch.difficulty ? 'fill-[#C8A96E] text-[#C8A96E]' : 'text-zinc-700'} />)}
                         </span>
                         <span>{ch.completion}%</span>
                         <span>{ch.revision_count} rev</span>
                         <span>{formatTime(ch.time_spent)}</span>
-                        <span className={`px-1.5 rounded ${ch.status === 'completed' ? 'text-[#4CAF7D]' : ch.status === 'in_progress' ? 'text-[#E07B39]' : 'text-zinc-500'}`}>{ch.status.replace('_',' ')}</span>
+                        <span className={`px-1.5 rounded ${ch.status === 'completed' ? 'text-[#4CAF7D]' : ch.status === 'in_progress' ? 'text-[#E07B39]' : 'text-zinc-500'}`}>{ch.status.replace('_', ' ')}</span>
                       </div>
                     </div>
-                    <div className="text-right">
+                    <div className="text-right shrink-0">
                       <div className="text-lg font-bold text-[#C8A96E]">{chScore}%</div>
                     </div>
-                    <ChevronRight size={18} className="text-zinc-700" />
+                    <ChevronRight size={18} className="text-zinc-700 shrink-0" />
                   </button>
                 );
               })}
@@ -312,7 +310,7 @@ export default function Study() {
     );
   }
 
-  // ─── PAPER LIST VIEW (default) ───
+  // ─── PAPER LIST VIEW ───
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -334,7 +332,9 @@ export default function Study() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {levelPapers.map(paper => {
-            const paperChapters = chapters.filter(c => c.paper_id === paper.id);
+            const paperChapters = chapters
+              .filter(c => c.paper_id === paper.id)
+              .sort((a, b) => (a.sort_order ?? 999) - (b.sort_order ?? 999));
             const score = paperProgressScore(paperChapters);
             const completed = paperChapters.filter(c => c.status === 'completed').length;
             return (
@@ -358,7 +358,7 @@ export default function Study() {
                 <div className="flex items-center gap-4 text-xs text-zinc-500">
                   <span className="flex items-center gap-1"><BookOpen size={12} /> {paperChapters.length} chapters</span>
                   <span className="flex items-center gap-1"><CheckCircle2 size={12} /> {completed} done</span>
-                  <span className="flex items-center gap-1"><Clock size={12} /> {formatTime(paperChapters.reduce((s,c)=>s+c.time_spent,0))}</span>
+                  <span className="flex items-center gap-1"><Clock size={12} /> {formatTime(paperChapters.reduce((s, c) => s + c.time_spent, 0))}</span>
                 </div>
                 <div className="mt-3 h-1.5 rounded-full bg-zinc-800 overflow-hidden">
                   <div className="h-full bg-[#C8A96E] rounded-full transition-all" style={{ width: `${score}%` }} />
@@ -503,7 +503,7 @@ function ChapterModal({ open, editing, paperId, onClose, onSaved }: { open: bool
         <div>
           <label className="mb-1.5 block text-sm font-medium text-zinc-300">Difficulty</label>
           <div className="flex gap-1">
-            {[1,2,3,4,5].map(n => (
+            {[1, 2, 3, 4, 5].map(n => (
               <button key={n} onClick={() => setDifficulty(n)} className="p-1">
                 <Star size={22} className={n <= difficulty ? 'fill-[#C8A96E] text-[#C8A96E]' : 'text-zinc-700'} />
               </button>
@@ -513,8 +513,8 @@ function ChapterModal({ open, editing, paperId, onClose, onSaved }: { open: bool
         <div>
           <label className="mb-1.5 block text-sm font-medium text-zinc-300">Status</label>
           <div className="grid grid-cols-3 gap-2">
-            {(['not_started','in_progress','completed'] as const).map(s => (
-              <button key={s} onClick={() => setStatus(s)} className={`rounded-xl border px-3 py-2 text-xs font-medium capitalize ${status === s ? 'border-[#C8A96E] bg-[#C8A96E]/10 text-[#C8A96E]' : 'border-zinc-700 text-zinc-400'}`}>{s.replace('_',' ')}</button>
+            {(['not_started', 'in_progress', 'completed'] as const).map(s => (
+              <button key={s} onClick={() => setStatus(s)} className={`rounded-xl border px-3 py-2 text-xs font-medium capitalize ${status === s ? 'border-[#C8A96E] bg-[#C8A96E]/10 text-[#C8A96E]' : 'border-zinc-700 text-zinc-400'}`}>{s.replace('_', ' ')}</button>
             ))}
           </div>
         </div>
@@ -530,9 +530,9 @@ function ChapterModal({ open, editing, paperId, onClose, onSaved }: { open: bool
           <div>
             <label className="mb-1.5 block text-sm font-medium text-zinc-300">Revisions</label>
             <div className="flex items-center gap-2">
-              <button onClick={() => setRevisionCount(Math.max(0, revisionCount-1))} className="rounded-lg border border-zinc-700 px-3 py-2 text-zinc-300">-</button>
+              <button onClick={() => setRevisionCount(Math.max(0, revisionCount - 1))} className="rounded-lg border border-zinc-700 px-3 py-2 text-zinc-300">-</button>
               <span className="flex-1 text-center text-zinc-100">{revisionCount}</span>
-              <button onClick={() => setRevisionCount(revisionCount+1)} className="rounded-lg border border-zinc-700 px-3 py-2 text-zinc-300">+</button>
+              <button onClick={() => setRevisionCount(revisionCount + 1)} className="rounded-lg border border-zinc-700 px-3 py-2 text-zinc-300">+</button>
             </div>
           </div>
         </div>

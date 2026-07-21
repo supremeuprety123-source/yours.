@@ -48,6 +48,7 @@ export interface Chapter {
   marks_obtained: number;
   marks_total: number;
   notes: string;
+  sort_order?: number;
   created_at: string;
   updated_at: string;
   sync_status: SyncStatus;
@@ -60,6 +61,7 @@ export interface Lesson {
   completion: number;
   time_spent: number;
   notes: string;
+  sort_order?: number;
   created_at: string;
   updated_at: string;
   sync_status: SyncStatus;
