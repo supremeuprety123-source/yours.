@@ -6,7 +6,7 @@ import { chapterProgressScore, paperProgressScore, levelProgressScore, formatTim
 import Modal from '../components/Modal';
 import ConfirmDialog from '../components/ConfirmDialog';
 import EmptyState from '../components/EmptyState';
-import { Plus, ChevronLeft, Edit2, Trash2, Star, Clock, RotateCw, BookOpen, Target, Award, FileText, CheckCircle2, Circle, ChevronRight } from 'lucide-react';
+import { Plus, Edit2, Trash2, Star, Clock, RotateCw, BookOpen, Award, CheckCircle2, Circle, ChevronRight, ArrowUp, ArrowDown } from 'lucide-react';
 
 export default function Study() {
   const { profile, refreshKey, refreshAll } = useApp();
@@ -46,6 +46,31 @@ export default function Study() {
 
   useEffect(() => { loadData(); }, [refreshKey]);
 
+  // ── Reorder helpers ──────────────────────────────────────────
+  const reorderChapters = async (paperId: string, fromIdx: number, toIdx: number) => {
+    const paperChaps = chapters
+      .filter(c => c.paper_id === paperId)
+      .sort((a, b) => (a.sort_order ?? 999) - (b.sort_order ?? 999));
+    const reordered = [...paperChaps];
+    const [moved] = reordered.splice(fromIdx, 1);
+    reordered.splice(toIdx, 0, moved);
+    // assign new sort_order values 1..n
+    await Promise.all(reordered.map((ch, i) => updateRecord('chapters', ch.id, { sort_order: i + 1 })));
+    await loadData();
+  };
+
+  const reorderLessons = async (chapterId: string, fromIdx: number, toIdx: number) => {
+    const chLess = lessons
+      .filter(l => l.chapter_id === chapterId)
+      .sort((a, b) => (a.sort_order ?? 999) - (b.sort_order ?? 999));
+    const reordered = [...chLess];
+    const [moved] = reordered.splice(fromIdx, 1);
+    reordered.splice(toIdx, 0, moved);
+    await Promise.all(reordered.map((l, i) => updateRecord('lessons', l.id, { sort_order: i + 1 })));
+    await loadData();
+  };
+  // ────────────────────────────────────────────────────────────
+
   const levelPapers = papers.filter(p => p.level === profile?.ca_level);
   const levelScore = levelProgressScore(levelPapers, chapters);
   const selectedPaper = papers.find(p => p.id === selectedPaperId);
@@ -81,11 +106,14 @@ export default function Study() {
     const chLessons = lessons
       .filter(l => l.chapter_id === selectedChapter.id)
       .sort((a, b) => (a.sort_order ?? 999) - (b.sort_order ?? 999));
-    const chRevisions = revisions.filter(r => r.chapter_id === selectedChapter.id).sort((a, b) => b.revised_at.localeCompare(a.revised_at));
+    const chRevisions = revisions
+      .filter(r => r.chapter_id === selectedChapter.id)
+      .sort((a, b) => b.revised_at.localeCompare(a.revised_at));
     const chScore = chapterProgressScore(selectedChapter);
 
     return (
       <div className="space-y-5">
+        {/* Breadcrumb */}
         <div className="flex items-center gap-2 text-sm">
           <button onClick={() => setView('list')} className="text-zinc-500 hover:text-zinc-300">Study</button>
           <ChevronRight size={14} className="text-zinc-700" />
@@ -94,6 +122,7 @@ export default function Study() {
           <span className="text-zinc-300">{selectedChapter.name}</span>
         </div>
 
+        {/* Chapter Header */}
         <div className="rounded-2xl border border-zinc-800 bg-[#1A1A1A] p-5">
           <div className="flex items-start justify-between gap-3">
             <div className="flex-1">
@@ -141,7 +170,6 @@ export default function Study() {
           {selectedChapter.last_revised && (
             <div className="mt-3 text-xs text-zinc-500">Last revised: {formatDate(selectedChapter.last_revised)}</div>
           )}
-
           {selectedChapter.notes && (
             <div className="mt-4 rounded-xl bg-zinc-900/50 p-3">
               <div className="text-xs font-medium text-zinc-500 mb-1">Notes</div>
@@ -150,6 +178,7 @@ export default function Study() {
           )}
         </div>
 
+        {/* Lessons */}
         <div className="rounded-2xl border border-zinc-800 bg-[#1A1A1A] p-5">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-semibold text-zinc-300">Lessons ({chLessons.length})</h3>
@@ -162,7 +191,21 @@ export default function Study() {
               {chLessons.map((l, idx) => (
                 <div key={l.id} className="rounded-xl border border-zinc-800/50 bg-zinc-900/30 px-4 py-3">
                   <div className="flex items-center gap-3">
-                    <div className={`flex h-7 w-7 items-center justify-center rounded-full ${l.completion >= 100 ? 'bg-[#4CAF7D]/10' : l.completion > 0 ? 'bg-[#E07B39]/10' : 'bg-zinc-800'}`}>
+                    {/* Up/Down reorder buttons */}
+                    <div className="flex flex-col gap-0.5 shrink-0">
+                      <button
+                        disabled={idx === 0}
+                        onClick={() => reorderLessons(selectedChapter.id, idx, idx - 1)}
+                        className="rounded p-0.5 text-zinc-600 hover:text-[#C8A96E] disabled:opacity-20 disabled:cursor-not-allowed"
+                      ><ArrowUp size={12} /></button>
+                      <button
+                        disabled={idx === chLessons.length - 1}
+                        onClick={() => reorderLessons(selectedChapter.id, idx, idx + 1)}
+                        className="rounded p-0.5 text-zinc-600 hover:text-[#C8A96E] disabled:opacity-20 disabled:cursor-not-allowed"
+                      ><ArrowDown size={12} /></button>
+                    </div>
+
+                    <div className={`flex h-7 w-7 items-center justify-center rounded-full shrink-0 ${l.completion >= 100 ? 'bg-[#4CAF7D]/10' : l.completion > 0 ? 'bg-[#E07B39]/10' : 'bg-zinc-800'}`}>
                       {l.completion >= 100
                         ? <CheckCircle2 size={15} className="text-[#4CAF7D]" />
                         : <span className="text-[10px] font-bold text-zinc-500">{idx + 1}</span>
@@ -187,10 +230,11 @@ export default function Study() {
           )}
         </div>
 
+        {/* Revision History */}
         <div className="rounded-2xl border border-zinc-800 bg-[#1A1A1A] p-5">
           <h3 className="text-sm font-semibold text-zinc-300 mb-3">Revision History ({chRevisions.length})</h3>
           {chRevisions.length === 0 ? (
-            <p className="text-sm text-zinc-600 py-3">No revisions recorded yet. Use the Focus Timer with this chapter linked to auto-log revisions.</p>
+            <p className="text-sm text-zinc-600 py-3">No revisions recorded yet.</p>
           ) : (
             <div className="space-y-1.5">
               {chRevisions.map((r, i) => (
@@ -224,12 +268,14 @@ export default function Study() {
 
     return (
       <div className="space-y-5">
+        {/* Breadcrumb */}
         <div className="flex items-center gap-2 text-sm">
           <button onClick={() => setView('list')} className="text-zinc-500 hover:text-zinc-300">Study</button>
           <ChevronRight size={14} className="text-zinc-700" />
           <span className="text-zinc-300">{selectedPaper.name}</span>
         </div>
 
+        {/* Paper Header */}
         <div className="rounded-2xl border border-zinc-800 bg-[#1A1A1A] p-5">
           <div className="flex items-start justify-between gap-3">
             <div className="flex-1">
@@ -251,6 +297,7 @@ export default function Study() {
           </div>
         </div>
 
+        {/* Chapters */}
         <div>
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-semibold text-zinc-300">Chapters</h3>
@@ -263,36 +310,51 @@ export default function Study() {
               {paperChapters.map((ch, idx) => {
                 const chScore = chapterProgressScore(ch);
                 return (
-                  <button
-                    key={ch.id}
-                    onClick={() => { setSelectedChapterId(ch.id); setView('chapter'); }}
-                    className="w-full flex items-center gap-3 rounded-2xl border border-zinc-800 bg-[#1A1A1A] px-5 py-4 hover:border-[#C8A96E]/30 hover:bg-zinc-900/30 transition-all text-left"
-                  >
-                    <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-zinc-800 text-xs font-bold text-zinc-400 shrink-0">
-                      {ch.sort_order ?? idx + 1}
+                  <div key={ch.id} className="flex items-center gap-2">
+                    {/* Up/Down reorder buttons */}
+                    <div className="flex flex-col gap-0.5 shrink-0">
+                      <button
+                        disabled={idx === 0}
+                        onClick={() => reorderChapters(selectedPaper.id, idx, idx - 1)}
+                        className="rounded p-1 text-zinc-600 hover:text-[#C8A96E] disabled:opacity-20 disabled:cursor-not-allowed"
+                      ><ArrowUp size={14} /></button>
+                      <button
+                        disabled={idx === paperChapters.length - 1}
+                        onClick={() => reorderChapters(selectedPaper.id, idx, idx + 1)}
+                        className="rounded p-1 text-zinc-600 hover:text-[#C8A96E] disabled:opacity-20 disabled:cursor-not-allowed"
+                      ><ArrowDown size={14} /></button>
                     </div>
-                    <div className={`flex h-10 w-10 items-center justify-center rounded-xl shrink-0 ${
-                      ch.status === 'completed' ? 'bg-[#4CAF7D]/10' : ch.status === 'in_progress' ? 'bg-[#E07B39]/10' : 'bg-zinc-800'
-                    }`}>
-                      {ch.status === 'completed' ? <CheckCircle2 size={18} className="text-[#4CAF7D]" /> : <BookOpen size={18} className="text-zinc-500" />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-zinc-200">{ch.name}</div>
-                      <div className="flex items-center gap-3 mt-0.5 text-[10px] text-zinc-500">
-                        <span className="flex items-center gap-0.5">
-                          {Array.from({ length: 5 }).map((_, i) => <Star key={i} size={8} className={i < ch.difficulty ? 'fill-[#C8A96E] text-[#C8A96E]' : 'text-zinc-700'} />)}
-                        </span>
-                        <span>{ch.completion}%</span>
-                        <span>{ch.revision_count} rev</span>
-                        <span>{formatTime(ch.time_spent)}</span>
-                        <span className={`px-1.5 rounded ${ch.status === 'completed' ? 'text-[#4CAF7D]' : ch.status === 'in_progress' ? 'text-[#E07B39]' : 'text-zinc-500'}`}>{ch.status.replace('_', ' ')}</span>
+
+                    <button
+                      onClick={() => { setSelectedChapterId(ch.id); setView('chapter'); }}
+                      className="flex-1 flex items-center gap-3 rounded-2xl border border-zinc-800 bg-[#1A1A1A] px-5 py-4 hover:border-[#C8A96E]/30 hover:bg-zinc-900/30 transition-all text-left"
+                    >
+                      <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-zinc-800 text-xs font-bold text-zinc-400 shrink-0">
+                        {idx + 1}
                       </div>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <div className="text-lg font-bold text-[#C8A96E]">{chScore}%</div>
-                    </div>
-                    <ChevronRight size={18} className="text-zinc-700 shrink-0" />
-                  </button>
+                      <div className={`flex h-10 w-10 items-center justify-center rounded-xl shrink-0 ${
+                        ch.status === 'completed' ? 'bg-[#4CAF7D]/10' : ch.status === 'in_progress' ? 'bg-[#E07B39]/10' : 'bg-zinc-800'
+                      }`}>
+                        {ch.status === 'completed' ? <CheckCircle2 size={18} className="text-[#4CAF7D]" /> : <BookOpen size={18} className="text-zinc-500" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium text-zinc-200">{ch.name}</div>
+                        <div className="flex items-center gap-3 mt-0.5 text-[10px] text-zinc-500">
+                          <span className="flex items-center gap-0.5">
+                            {Array.from({ length: 5 }).map((_, i) => <Star key={i} size={8} className={i < ch.difficulty ? 'fill-[#C8A96E] text-[#C8A96E]' : 'text-zinc-700'} />)}
+                          </span>
+                          <span>{ch.completion}%</span>
+                          <span>{ch.revision_count} rev</span>
+                          <span>{formatTime(ch.time_spent)}</span>
+                          <span className={`px-1.5 rounded ${ch.status === 'completed' ? 'text-[#4CAF7D]' : ch.status === 'in_progress' ? 'text-[#E07B39]' : 'text-zinc-500'}`}>{ch.status.replace('_', ' ')}</span>
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <div className="text-lg font-bold text-[#C8A96E]">{chScore}%</div>
+                      </div>
+                      <ChevronRight size={18} className="text-zinc-700 shrink-0" />
+                    </button>
+                  </div>
                 );
               })}
             </div>
@@ -473,17 +535,10 @@ function ChapterModal({ open, editing, paperId, onClose, onSaved }: { open: bool
   const save = async () => {
     if (!name.trim()) return;
     const data = {
-      paper_id: paperId,
-      name: name.trim(),
-      difficulty,
-      status,
-      completion,
-      time_spent: timeSpent,
-      revision_count: revisionCount,
-      marks_obtained: marksObtained,
-      marks_total: marksTotal,
-      notes,
-      last_revised: editing?.last_revised || null,
+      paper_id: paperId, name: name.trim(), difficulty, status, completion,
+      time_spent: timeSpent, revision_count: revisionCount,
+      marks_obtained: marksObtained, marks_total: marksTotal,
+      notes, last_revised: editing?.last_revised || null,
     };
     if (editing) {
       await updateRecord('chapters', editing.id, data);
