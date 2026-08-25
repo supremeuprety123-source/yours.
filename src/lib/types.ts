@@ -1,6 +1,7 @@
 export type CALevel = 'Foundation' | 'Intermediate' | 'Final';
 export type CAGroup = '' | 'G1' | 'G2';
 export type SyncStatus = 'pending' | 'synced';
+export type ConfidenceLevel = 'red' | 'yellow' | 'green' | null;
 
 export interface Profile {
   id: string;
@@ -39,16 +40,19 @@ export interface Chapter {
   id: string;
   paper_id: string;
   name: string;
-  difficulty: number; // 1-5
+  difficulty: number;
   status: 'not_started' | 'in_progress' | 'completed';
-  completion: number; // 0-100
-  time_spent: number; // minutes
+  completion: number;
+  time_spent: number;
   revision_count: number;
   last_revised: string | null;
   marks_obtained: number;
   marks_total: number;
   notes: string;
   sort_order?: number;
+  confidence?: ConfidenceLevel;
+  phase1_done?: boolean;
+  phase2_done?: boolean;
   created_at: string;
   updated_at: string;
   sync_status: SyncStatus;
@@ -78,15 +82,17 @@ export interface Routine {
   id: string;
   title: string;
   category: string;
-  start_time: string; // HH:MM
-  end_time: string; // HH:MM
+  start_time: string;
+  end_time: string;
   linked_subject: string;
   repeat_type: 'daily' | 'weekly' | 'monthly' | 'custom' | 'life';
-  repeat_days: number[]; // 0-6 for daily
-  repeat_exceptions: string[]; // dates to skip
+  repeat_days: number[];
+  repeat_exceptions: string[];
   repeat_until: string | null;
-  completed_dates: string[]; // ISO dates where completed
-  date: string | null; // specific date for one-time
+  completed_dates: string[];
+  date: string | null;
+  notes?: string;
+  plan_tag?: string;
   created_at: string;
   updated_at: string;
   sync_status: SyncStatus;
@@ -95,7 +101,7 @@ export interface Routine {
 export interface FocusSession {
   id: string;
   type: 'stopwatch' | 'countdown' | 'pomodoro';
-  duration: number; // minutes
+  duration: number;
   subject: string;
   completed_at: string;
   sync_status: SyncStatus;
@@ -128,9 +134,9 @@ export interface Transaction {
 export interface DiaryEntry {
   id: string;
   date: string;
-  mood: number; // 1-5
+  mood: number;
   mental_tags: string[];
-  performance_rating: number; // 1-5
+  performance_rating: number;
   journal_text: string;
   learned: string;
   planned: string;
@@ -159,6 +165,21 @@ export interface Exam {
   sync_status: SyncStatus;
 }
 
+export interface MockScore {
+  id: string;
+  date: string;
+  paper: string;
+  score: number;
+  max_score: number;
+  confident_attempts: number;
+  guessed_attempts: number;
+  wrong_guesses: number;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+  sync_status: SyncStatus;
+}
+
 export interface DeletedRecord {
   id: string;
   table: string;
@@ -170,4 +191,4 @@ export interface DeletedRecord {
 export type TableName =
   | 'profile' | 'papers' | 'chapters' | 'lessons' | 'revision_history'
   | 'routines' | 'focus_sessions' | 'categories' | 'transactions'
-  | 'diary_entries' | 'life_notes' | 'exams';
+  | 'diary_entries' | 'life_notes' | 'exams' | 'mock_scores';

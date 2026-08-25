@@ -14,12 +14,11 @@ function AppContent() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-[#0D0D0D]">
-        <div className="flex flex-col items-center gap-4">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl border-2 border-[#C8A96E]">
-            <span className="text-2xl font-bold text-[#C8A96E]">Y</span>
-          </div>
-          <div className="h-6 w-6 animate-spin rounded-full border-2 border-[#C8A96E] border-t-transparent" />
+      <div className="flex items-center justify-center min-h-screen min-h-[100dvh] bg-[#0F0E0C]">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_70%_50%_at_50%_30%,rgba(232,184,109,0.12),transparent_60%)]" />
+        <div className="relative flex flex-col items-center gap-5">
+          <div className="y-mark h-[4.25rem] w-[4.25rem] text-2xl">Y</div>
+          <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#E8B86D]/25 border-t-[#E8B86D]" />
         </div>
       </div>
     );

@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { getAll, addRecord, updateRecord, removeRecord, removeWithChildren } from '../lib/store';
-import type { Paper, Chapter, Lesson, RevisionHistory } from '../lib/types';
+import type { Paper, Chapter, Lesson, RevisionHistory, ConfidenceLevel } from '../lib/types';
 import { chapterProgressScore, paperProgressScore, levelProgressScore, formatTime, formatDate } from '../lib/utils';
 import Modal from '../components/Modal';
 import ConfirmDialog from '../components/ConfirmDialog';
 import EmptyState from '../components/EmptyState';
-import { Plus, Edit2, Trash2, Star, Clock, RotateCw, BookOpen, Award, CheckCircle2, Circle, ChevronRight, ArrowUp, ArrowDown } from 'lucide-react';
+import { Plus, Edit2, Trash2, Star, Clock, RotateCw, BookOpen, Award, CheckCircle2, Circle, ChevronRight, ArrowUp, ArrowDown, Target } from 'lucide-react';
 
 export default function Study() {
   const { profile, refreshKey, refreshAll } = useApp();
@@ -77,7 +77,7 @@ export default function Study() {
   const selectedChapter = chapters.find(c => c.id === selectedChapterId);
 
   if (loading) {
-    return <div className="flex items-center justify-center py-20"><div className="h-8 w-8 animate-spin rounded-full border-2 border-[#C8A96E] border-t-transparent" /></div>;
+    return <div className="flex items-center justify-center py-20"><div className="h-8 w-8 animate-spin rounded-full border-2 border-[#E8B86D] border-t-transparent" /></div>;
   }
 
   const handleDelete = async () => {
@@ -115,114 +115,178 @@ export default function Study() {
       <div className="space-y-5">
         {/* Breadcrumb */}
         <div className="flex items-center gap-2 text-sm">
-          <button onClick={() => setView('list')} className="text-zinc-500 hover:text-zinc-300">Study</button>
-          <ChevronRight size={14} className="text-zinc-700" />
-          <button onClick={() => setView('paper')} className="text-zinc-500 hover:text-zinc-300">{selectedPaper?.name || 'Paper'}</button>
-          <ChevronRight size={14} className="text-zinc-700" />
-          <span className="text-zinc-300">{selectedChapter.name}</span>
+          <button onClick={() => setView('list')} className="text-[#F7F1E7]0 hover:text-[#D6CFC4]">Study</button>
+          <ChevronRight size={14} className="text-[#5C574F]" />
+          <button onClick={() => setView('paper')} className="text-[#F7F1E7]0 hover:text-[#D6CFC4]">{selectedPaper?.name || 'Paper'}</button>
+          <ChevronRight size={14} className="text-[#5C574F]" />
+          <span className="text-[#D6CFC4]">{selectedChapter.name}</span>
         </div>
 
         {/* Chapter Header */}
-        <div className="rounded-2xl border border-zinc-800 bg-[#1A1A1A] p-5">
+        <div className="y-panel p-5">
           <div className="flex items-start justify-between gap-3">
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-1">
                 <span className={`px-2 py-0.5 rounded-md text-xs font-medium ${
-                  selectedChapter.status === 'completed' ? 'bg-[#4CAF7D]/10 text-[#4CAF7D]' :
-                  selectedChapter.status === 'in_progress' ? 'bg-[#E07B39]/10 text-[#E07B39]' :
-                  'bg-zinc-800 text-zinc-500'
+                  selectedChapter.status === 'completed' ? 'bg-[#8FBC8F]/10 text-[#8FBC8F]' :
+                  selectedChapter.status === 'in_progress' ? 'bg-[#E07A5F]/10 text-[#E07A5F]' :
+                  'bg-[#2A261F] text-[#F7F1E7]0'
                 }`}>{selectedChapter.status.replace('_', ' ')}</span>
                 <div className="flex items-center gap-0.5">
                   {Array.from({ length: 5 }).map((_, i) => (
-                    <Star key={i} size={12} className={i < selectedChapter.difficulty ? 'fill-[#C8A96E] text-[#C8A96E]' : 'text-zinc-700'} />
+                    <Star key={i} size={12} className={i < selectedChapter.difficulty ? 'fill-[#E8B86D] text-[#E8B86D]' : 'text-[#5C574F]'} />
                   ))}
                 </div>
               </div>
-              <h2 className="text-xl font-bold text-zinc-100">{selectedChapter.name}</h2>
+              <h2 className="text-xl font-bold text-[#F5F0E8]">{selectedChapter.name}</h2>
             </div>
             <div className="flex items-center gap-2">
               <div className="text-right">
-                <div className="text-2xl font-bold text-[#C8A96E]">{chScore}%</div>
-                <div className="text-[10px] text-zinc-500">progress</div>
+                <div className="text-2xl font-bold text-[#E8B86D]">{chScore}%</div>
+                <div className="text-[10px] text-[#F7F1E7]0">progress</div>
               </div>
-              <button onClick={() => { setEditingChapter(selectedChapter); setChapterModal(true); }} className="rounded-lg p-2 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800"><Edit2 size={16} /></button>
-              <button onClick={() => setDeleteTarget({ type: 'chapter', id: selectedChapter.id, name: selectedChapter.name })} className="rounded-lg p-2 text-zinc-500 hover:text-[#C0392B] hover:bg-zinc-800"><Trash2 size={16} /></button>
+              <button onClick={() => { setEditingChapter(selectedChapter); setChapterModal(true); }} className="rounded-lg p-2 text-[#F7F1E7]0 hover:text-[#D6CFC4] hover:bg-[#2A261F]"><Edit2 size={16} /></button>
+              <button onClick={() => setDeleteTarget({ type: 'chapter', id: selectedChapter.id, name: selectedChapter.name })} className="rounded-lg p-2 text-[#F7F1E7]0 hover:text-[#E07A5F] hover:bg-[#2A261F]"><Trash2 size={16} /></button>
             </div>
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
-            <ChapterStat icon={<Circle size={14} />} label="Completion" value={`${selectedChapter.completion}%`} color="#C8A96E" />
-            <ChapterStat icon={<Clock size={14} />} label="Time Spent" value={formatTime(selectedChapter.time_spent)} color="#E07B39" />
-            <ChapterStat icon={<RotateCw size={14} />} label="Revisions" value={selectedChapter.revision_count} color="#4CAF7D" />
-            <ChapterStat icon={<Award size={14} />} label="Marks" value={selectedChapter.marks_total > 0 ? `${selectedChapter.marks_obtained}/${selectedChapter.marks_total}` : '—'} color="#C8A96E" />
+            <ChapterStat icon={<Circle size={14} />} label="Completion" value={`${selectedChapter.completion}%`} color="#E8B86D" />
+            <ChapterStat icon={<Clock size={14} />} label="Time Spent" value={formatTime(selectedChapter.time_spent)} color="#E07A5F" />
+            <ChapterStat icon={<RotateCw size={14} />} label="Revisions" value={selectedChapter.revision_count} color="#8FBC8F" />
+            <ChapterStat icon={<Award size={14} />} label="Marks" value={selectedChapter.marks_total > 0 ? `${selectedChapter.marks_obtained}/${selectedChapter.marks_total}` : '—'} color="#E8B86D" />
+          </div>
+
+          {/* Confidence + Phase tracking */}
+          <div className="mt-4 rounded-xl border border-[rgba(255,236,200,0.07)] bg-black/25 p-3 space-y-3">
+            <div>
+              <div className="text-[10px] font-medium text-[#F7F1E7]0 mb-1.5">Confidence (after revision)</div>
+              <div className="flex gap-2">
+                {([
+                  { key: 'red' as ConfidenceLevel, label: '🔴 Weak', color: '#E07A5F' },
+                  { key: 'yellow' as ConfidenceLevel, label: '🟡 OK', color: '#E07A5F' },
+                  { key: 'green' as ConfidenceLevel, label: '🟢 Solid', color: '#8FBC8F' },
+                ]).map(c => (
+                  <button
+                    key={String(c.key)}
+                    onClick={async () => {
+                      const next = selectedChapter.confidence === c.key ? null : c.key;
+                      await updateRecord('chapters', selectedChapter.id, { confidence: next });
+                      loadData(); refreshAll();
+                    }}
+                    className={`flex-1 rounded-lg border px-2 py-2 text-[11px] font-medium transition-all ${
+                      selectedChapter.confidence === c.key
+                        ? 'border-current bg-opacity-10'
+                        : 'border-[rgba(255,236,200,0.1)] text-[#F7F1E7]0'
+                    }`}
+                    style={selectedChapter.confidence === c.key ? { borderColor: c.color, color: c.color, background: c.color + '15' } : {}}
+                  >
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={async () => {
+                  await updateRecord('chapters', selectedChapter.id, { phase1_done: !selectedChapter.phase1_done });
+                  loadData(); refreshAll();
+                }}
+                className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg border px-2 py-2 text-[11px] font-medium ${
+                  selectedChapter.phase1_done
+                    ? 'border-[#E8B86D] bg-[#E8B86D]/10 text-[#E8B86D]'
+                    : 'border-[rgba(255,236,200,0.1)] text-[#F7F1E7]0'
+                }`}
+              >
+                {selectedChapter.phase1_done ? <CheckCircle2 size={12} /> : <Circle size={12} />} Phase 1
+              </button>
+              <button
+                onClick={async () => {
+                  await updateRecord('chapters', selectedChapter.id, { phase2_done: !selectedChapter.phase2_done });
+                  loadData(); refreshAll();
+                }}
+                className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg border px-2 py-2 text-[11px] font-medium ${
+                  selectedChapter.phase2_done
+                    ? 'border-[#8FBC8F] bg-[#8FBC8F]/10 text-[#8FBC8F]'
+                    : 'border-[rgba(255,236,200,0.1)] text-[#F7F1E7]0'
+                }`}
+              >
+                {selectedChapter.phase2_done ? <CheckCircle2 size={12} /> : <Circle size={12} />} Phase 2
+              </button>
+            </div>
+            {selectedChapter.phase1_done && selectedChapter.phase2_done && selectedChapter.confidence === 'green' && (
+              <div className="flex items-center gap-1.5 text-[11px] text-[#8FBC8F]">
+                <Target size={12} /> Exam-ready
+              </div>
+            )}
           </div>
 
           <div className="mt-4">
             <div className="flex items-center justify-between text-xs mb-1.5">
-              <span className="text-zinc-500">Completion</span>
-              <span className="text-[#C8A96E] font-medium">{selectedChapter.completion}%</span>
+              <span className="text-[#F7F1E7]0">Completion</span>
+              <span className="text-[#E8B86D] font-medium">{selectedChapter.completion}%</span>
             </div>
-            <div className="h-2 rounded-full bg-zinc-800 overflow-hidden">
-              <div className="h-full bg-[#C8A96E] rounded-full transition-all" style={{ width: `${selectedChapter.completion}%` }} />
+            <div className="h-2 rounded-full bg-[#2A261F] overflow-hidden">
+              <div className="h-full bg-[#E8B86D] rounded-full transition-all" style={{ width: `${selectedChapter.completion}%` }} />
             </div>
           </div>
 
           {selectedChapter.last_revised && (
-            <div className="mt-3 text-xs text-zinc-500">Last revised: {formatDate(selectedChapter.last_revised)}</div>
+            <div className="mt-3 text-xs text-[#F7F1E7]0">Last revised: {formatDate(selectedChapter.last_revised)}</div>
           )}
           {selectedChapter.notes && (
-            <div className="mt-4 rounded-xl bg-zinc-900/50 p-3">
-              <div className="text-xs font-medium text-zinc-500 mb-1">Notes</div>
-              <p className="text-sm text-zinc-400 whitespace-pre-wrap">{selectedChapter.notes}</p>
+            <div className="mt-4 rounded-xl bg-black/25 p-3">
+              <div className="text-xs font-medium text-[#F7F1E7]0 mb-1">Notes</div>
+              <p className="text-sm text-[#A8A29A] whitespace-pre-wrap">{selectedChapter.notes}</p>
             </div>
           )}
         </div>
 
         {/* Lessons */}
-        <div className="rounded-2xl border border-zinc-800 bg-[#1A1A1A] p-5">
+        <div className="y-panel p-5">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold text-zinc-300">Lessons ({chLessons.length})</h3>
-            <button onClick={() => { setLessonChapterId(selectedChapter.id); setLessonModal(true); }} className="flex items-center gap-1 text-xs text-[#C8A96E] hover:underline"><Plus size={14} /> Add Lesson</button>
+            <h3 className="text-sm font-semibold text-[#D6CFC4]">Lessons ({chLessons.length})</h3>
+            <button onClick={() => { setLessonChapterId(selectedChapter.id); setLessonModal(true); }} className="flex items-center gap-1 text-xs text-[#E8B86D] hover:underline"><Plus size={14} /> Add Lesson</button>
           </div>
           {chLessons.length === 0 ? (
-            <p className="text-sm text-zinc-600 py-3">No lessons yet. Add your first lesson for this chapter.</p>
+            <p className="text-sm text-[#6B6560] py-3">No lessons yet. Add your first lesson for this chapter.</p>
           ) : (
             <div className="space-y-2">
               {chLessons.map((l, idx) => (
-                <div key={l.id} className="rounded-xl border border-zinc-800/50 bg-zinc-900/30 px-4 py-3">
+                <div key={l.id} className="rounded-xl border border-[rgba(255,236,200,0.05)] bg-black/20 px-4 py-3">
                   <div className="flex items-center gap-3">
                     {/* Up/Down reorder buttons */}
                     <div className="flex flex-col gap-0.5 shrink-0">
                       <button
                         disabled={idx === 0}
                         onClick={() => reorderLessons(selectedChapter.id, idx, idx - 1)}
-                        className="rounded p-0.5 text-zinc-600 hover:text-[#C8A96E] disabled:opacity-20 disabled:cursor-not-allowed"
+                        className="rounded p-0.5 text-[#6B6560] hover:text-[#E8B86D] disabled:opacity-20 disabled:cursor-not-allowed"
                       ><ArrowUp size={12} /></button>
                       <button
                         disabled={idx === chLessons.length - 1}
                         onClick={() => reorderLessons(selectedChapter.id, idx, idx + 1)}
-                        className="rounded p-0.5 text-zinc-600 hover:text-[#C8A96E] disabled:opacity-20 disabled:cursor-not-allowed"
+                        className="rounded p-0.5 text-[#6B6560] hover:text-[#E8B86D] disabled:opacity-20 disabled:cursor-not-allowed"
                       ><ArrowDown size={12} /></button>
                     </div>
 
-                    <div className={`flex h-7 w-7 items-center justify-center rounded-full shrink-0 ${l.completion >= 100 ? 'bg-[#4CAF7D]/10' : l.completion > 0 ? 'bg-[#E07B39]/10' : 'bg-zinc-800'}`}>
+                    <div className={`flex h-7 w-7 items-center justify-center rounded-full shrink-0 ${l.completion >= 100 ? 'bg-[#8FBC8F]/10' : l.completion > 0 ? 'bg-[#E07A5F]/10' : 'bg-[#2A261F]'}`}>
                       {l.completion >= 100
-                        ? <CheckCircle2 size={15} className="text-[#4CAF7D]" />
-                        : <span className="text-[10px] font-bold text-zinc-500">{idx + 1}</span>
+                        ? <CheckCircle2 size={15} className="text-[#8FBC8F]" />
+                        : <span className="text-[10px] font-bold text-[#F7F1E7]0">{idx + 1}</span>
                       }
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-zinc-200">{l.name}</div>
-                      <div className="text-xs text-zinc-500">{l.completion}% complete · {formatTime(l.time_spent)}</div>
+                      <div className="text-sm font-medium text-[#EDE6DA]">{l.name}</div>
+                      <div className="text-xs text-[#F7F1E7]0">{l.completion}% complete · {formatTime(l.time_spent)}</div>
                     </div>
-                    <div className="w-20 h-1.5 rounded-full bg-zinc-800 overflow-hidden">
-                      <div className={`h-full rounded-full ${l.completion >= 100 ? 'bg-[#4CAF7D]' : 'bg-[#E07B39]'}`} style={{ width: `${l.completion}%` }} />
+                    <div className="w-20 h-1.5 rounded-full bg-[#2A261F] overflow-hidden">
+                      <div className={`h-full rounded-full ${l.completion >= 100 ? 'bg-[#8FBC8F]' : 'bg-[#E07A5F]'}`} style={{ width: `${l.completion}%` }} />
                     </div>
-                    <button onClick={() => { setEditingLesson(l); setLessonModal(true); }} className="text-zinc-500 hover:text-zinc-300"><Edit2 size={14} /></button>
-                    <button onClick={() => setDeleteTarget({ type: 'lesson', id: l.id, name: l.name })} className="text-zinc-600 hover:text-[#C0392B]"><Trash2 size={14} /></button>
+                    <button onClick={() => { setEditingLesson(l); setLessonModal(true); }} className="text-[#F7F1E7]0 hover:text-[#D6CFC4]"><Edit2 size={14} /></button>
+                    <button onClick={() => setDeleteTarget({ type: 'lesson', id: l.id, name: l.name })} className="text-[#6B6560] hover:text-[#E07A5F]"><Trash2 size={14} /></button>
                   </div>
                   {l.notes && (
-                    <div className="mt-2 ml-10 rounded-lg bg-zinc-800/30 p-2 text-xs text-zinc-400 whitespace-pre-wrap">{l.notes}</div>
+                    <div className="mt-2 ml-10 rounded-lg bg-[#2A261F]/30 p-2 text-xs text-[#A8A29A] whitespace-pre-wrap">{l.notes}</div>
                   )}
                 </div>
               ))}
@@ -231,17 +295,17 @@ export default function Study() {
         </div>
 
         {/* Revision History */}
-        <div className="rounded-2xl border border-zinc-800 bg-[#1A1A1A] p-5">
-          <h3 className="text-sm font-semibold text-zinc-300 mb-3">Revision History ({chRevisions.length})</h3>
+        <div className="y-panel p-5">
+          <h3 className="text-sm font-semibold text-[#D6CFC4] mb-3">Revision History ({chRevisions.length})</h3>
           {chRevisions.length === 0 ? (
-            <p className="text-sm text-zinc-600 py-3">No revisions recorded yet.</p>
+            <p className="text-sm text-[#6B6560] py-3">No revisions recorded yet.</p>
           ) : (
             <div className="space-y-1.5">
               {chRevisions.map((r, i) => (
-                <div key={r.id} className="flex items-center gap-3 rounded-lg bg-zinc-900/50 px-3 py-2">
-                  <span className="text-xs text-zinc-600 w-6">#{chRevisions.length - i}</span>
-                  <RotateCw size={12} className="text-[#4CAF7D]" />
-                  <span className="text-sm text-zinc-300">{formatDate(r.revised_at)}</span>
+                <div key={r.id} className="flex items-center gap-3 rounded-lg bg-black/25 px-3 py-2">
+                  <span className="text-xs text-[#6B6560] w-6">#{chRevisions.length - i}</span>
+                  <RotateCw size={12} className="text-[#8FBC8F]" />
+                  <span className="text-sm text-[#D6CFC4]">{formatDate(r.revised_at)}</span>
                 </div>
               ))}
             </div>
@@ -270,29 +334,29 @@ export default function Study() {
       <div className="space-y-5">
         {/* Breadcrumb */}
         <div className="flex items-center gap-2 text-sm">
-          <button onClick={() => setView('list')} className="text-zinc-500 hover:text-zinc-300">Study</button>
-          <ChevronRight size={14} className="text-zinc-700" />
-          <span className="text-zinc-300">{selectedPaper.name}</span>
+          <button onClick={() => setView('list')} className="text-[#F7F1E7]0 hover:text-[#D6CFC4]">Study</button>
+          <ChevronRight size={14} className="text-[#5C574F]" />
+          <span className="text-[#D6CFC4]">{selectedPaper.name}</span>
         </div>
 
         {/* Paper Header */}
-        <div className="rounded-2xl border border-zinc-800 bg-[#1A1A1A] p-5">
+        <div className="y-panel p-5">
           <div className="flex items-start justify-between gap-3">
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-1">
-                <span className="rounded-md bg-[#C8A96E]/10 px-2 py-0.5 text-xs font-medium text-[#C8A96E]">Paper {selectedPaper.number}</span>
-                {selectedPaper.group && <span className="rounded-md bg-zinc-800 px-2 py-0.5 text-xs text-zinc-400">{selectedPaper.group}</span>}
+                <span className="rounded-md bg-[#E8B86D]/10 px-2 py-0.5 text-xs font-medium text-[#E8B86D]">Paper {selectedPaper.number}</span>
+                {selectedPaper.group && <span className="rounded-md bg-[#2A261F] px-2 py-0.5 text-xs text-[#A8A29A]">{selectedPaper.group}</span>}
               </div>
-              <h2 className="text-xl font-bold text-zinc-100">{selectedPaper.name}</h2>
-              <p className="text-xs text-zinc-500 mt-1">ICAI CA {selectedPaper.level} · {paperChapters.length} chapters · {formatTime(paperChapters.reduce((s, c) => s + c.time_spent, 0))}</p>
+              <h2 className="text-xl font-bold text-[#F5F0E8]">{selectedPaper.name}</h2>
+              <p className="text-xs text-[#F7F1E7]0 mt-1">ICAI CA {selectedPaper.level} · {paperChapters.length} chapters · {formatTime(paperChapters.reduce((s, c) => s + c.time_spent, 0))}</p>
             </div>
             <div className="flex items-center gap-2">
               <div className="text-right">
-                <div className="text-2xl font-bold text-[#C8A96E]">{score}%</div>
-                <div className="text-[10px] text-zinc-500">progress</div>
+                <div className="text-2xl font-bold text-[#E8B86D]">{score}%</div>
+                <div className="text-[10px] text-[#F7F1E7]0">progress</div>
               </div>
-              <button onClick={() => { setEditingPaper(selectedPaper); setPaperModal(true); }} className="rounded-lg p-2 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800"><Edit2 size={16} /></button>
-              <button onClick={() => setDeleteTarget({ type: 'paper', id: selectedPaper.id, name: selectedPaper.name })} className="rounded-lg p-2 text-zinc-500 hover:text-[#C0392B] hover:bg-zinc-800"><Trash2 size={16} /></button>
+              <button onClick={() => { setEditingPaper(selectedPaper); setPaperModal(true); }} className="rounded-lg p-2 text-[#F7F1E7]0 hover:text-[#D6CFC4] hover:bg-[#2A261F]"><Edit2 size={16} /></button>
+              <button onClick={() => setDeleteTarget({ type: 'paper', id: selectedPaper.id, name: selectedPaper.name })} className="rounded-lg p-2 text-[#F7F1E7]0 hover:text-[#E07A5F] hover:bg-[#2A261F]"><Trash2 size={16} /></button>
             </div>
           </div>
         </div>
@@ -300,8 +364,8 @@ export default function Study() {
         {/* Chapters */}
         <div>
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold text-zinc-300">Chapters</h3>
-            <button onClick={() => { setEditingChapter(null); setChapterPaperId(selectedPaper.id); setChapterModal(true); }} className="flex items-center gap-1.5 rounded-xl bg-[#C8A96E] px-3 py-2 text-sm font-semibold text-black hover:bg-[#d4b87f]"><Plus size={16} /> Add Chapter</button>
+            <h3 className="text-sm font-semibold text-[#D6CFC4]">Chapters</h3>
+            <button onClick={() => { setEditingChapter(null); setChapterPaperId(selectedPaper.id); setChapterModal(true); }} className="flex items-center gap-1.5 rounded-xl bg-[#E8B86D] px-3 py-2 text-sm font-semibold text-black hover:bg-[#F0C98A]"><Plus size={16} /> Add Chapter</button>
           </div>
           {paperChapters.length === 0 ? (
             <EmptyState icon={<BookOpen size={36} />} message="No chapters yet. Add your first chapter to start tracking progress." />
@@ -316,43 +380,48 @@ export default function Study() {
                       <button
                         disabled={idx === 0}
                         onClick={() => reorderChapters(selectedPaper.id, idx, idx - 1)}
-                        className="rounded p-1 text-zinc-600 hover:text-[#C8A96E] disabled:opacity-20 disabled:cursor-not-allowed"
+                        className="rounded p-1 text-[#6B6560] hover:text-[#E8B86D] disabled:opacity-20 disabled:cursor-not-allowed"
                       ><ArrowUp size={14} /></button>
                       <button
                         disabled={idx === paperChapters.length - 1}
                         onClick={() => reorderChapters(selectedPaper.id, idx, idx + 1)}
-                        className="rounded p-1 text-zinc-600 hover:text-[#C8A96E] disabled:opacity-20 disabled:cursor-not-allowed"
+                        className="rounded p-1 text-[#6B6560] hover:text-[#E8B86D] disabled:opacity-20 disabled:cursor-not-allowed"
                       ><ArrowDown size={14} /></button>
                     </div>
 
                     <button
                       onClick={() => { setSelectedChapterId(ch.id); setView('chapter'); }}
-                      className="flex-1 flex items-center gap-3 rounded-2xl border border-zinc-800 bg-[#1A1A1A] px-5 py-4 hover:border-[#C8A96E]/30 hover:bg-zinc-900/30 transition-all text-left"
+                      className="flex-1 flex items-center gap-3 y-panel px-5 py-4 hover:border-[#E8B86D]/30 hover:bg-black/20 transition-all text-left"
                     >
-                      <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-zinc-800 text-xs font-bold text-zinc-400 shrink-0">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#2A261F] text-xs font-bold text-[#A8A29A] shrink-0">
                         {idx + 1}
                       </div>
                       <div className={`flex h-10 w-10 items-center justify-center rounded-xl shrink-0 ${
-                        ch.status === 'completed' ? 'bg-[#4CAF7D]/10' : ch.status === 'in_progress' ? 'bg-[#E07B39]/10' : 'bg-zinc-800'
+                        ch.status === 'completed' ? 'bg-[#8FBC8F]/10' : ch.status === 'in_progress' ? 'bg-[#E07A5F]/10' : 'bg-[#2A261F]'
                       }`}>
-                        {ch.status === 'completed' ? <CheckCircle2 size={18} className="text-[#4CAF7D]" /> : <BookOpen size={18} className="text-zinc-500" />}
+                        {ch.status === 'completed' ? <CheckCircle2 size={18} className="text-[#8FBC8F]" /> : <BookOpen size={18} className="text-[#F7F1E7]0" />}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium text-zinc-200">{ch.name}</div>
-                        <div className="flex items-center gap-3 mt-0.5 text-[10px] text-zinc-500">
+                        <div className="text-sm font-medium text-[#EDE6DA]">{ch.name}</div>
+                        <div className="flex items-center gap-3 mt-0.5 text-[10px] text-[#F7F1E7]0">
                           <span className="flex items-center gap-0.5">
-                            {Array.from({ length: 5 }).map((_, i) => <Star key={i} size={8} className={i < ch.difficulty ? 'fill-[#C8A96E] text-[#C8A96E]' : 'text-zinc-700'} />)}
+                            {Array.from({ length: 5 }).map((_, i) => <Star key={i} size={8} className={i < ch.difficulty ? 'fill-[#E8B86D] text-[#E8B86D]' : 'text-[#5C574F]'} />)}
                           </span>
                           <span>{ch.completion}%</span>
                           <span>{ch.revision_count} rev</span>
                           <span>{formatTime(ch.time_spent)}</span>
-                          <span className={`px-1.5 rounded ${ch.status === 'completed' ? 'text-[#4CAF7D]' : ch.status === 'in_progress' ? 'text-[#E07B39]' : 'text-zinc-500'}`}>{ch.status.replace('_', ' ')}</span>
+                          <span className={`px-1.5 rounded ${ch.status === 'completed' ? 'text-[#8FBC8F]' : ch.status === 'in_progress' ? 'text-[#E07A5F]' : 'text-[#F7F1E7]0'}`}>{ch.status.replace('_', ' ')}</span>
+                          {ch.confidence === 'red' && <span className="text-[10px]">🔴</span>}
+                          {ch.confidence === 'yellow' && <span className="text-[10px]">🟡</span>}
+                          {ch.confidence === 'green' && <span className="text-[10px]">🟢</span>}
+                          {ch.phase1_done && <span className="text-[9px] text-[#E8B86D]">P1</span>}
+                          {ch.phase2_done && <span className="text-[9px] text-[#8FBC8F]">P2</span>}
                         </div>
                       </div>
                       <div className="text-right shrink-0">
-                        <div className="text-lg font-bold text-[#C8A96E]">{chScore}%</div>
+                        <div className="text-lg font-bold text-[#E8B86D]">{chScore}%</div>
                       </div>
-                      <ChevronRight size={18} className="text-zinc-700 shrink-0" />
+                      <ChevronRight size={18} className="text-[#5C574F] shrink-0" />
                     </button>
                   </div>
                 );
@@ -377,10 +446,10 @@ export default function Study() {
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-zinc-100">Study</h1>
-          <p className="text-sm text-zinc-500 mt-1">ICAI CA {profile?.ca_level} · Level progress: <span className="text-[#C8A96E] font-semibold">{levelScore}%</span></p>
+          <h1 className="y-page-title">Study</h1>
+          <p className="text-sm text-[#F7F1E7]0 mt-1">ICAI CA {profile?.ca_level} · Level progress: <span className="text-[#E8B86D] font-semibold">{levelScore}%</span></p>
         </div>
-        <button onClick={() => { setEditingPaper(null); setPaperModal(true); }} className="flex items-center gap-2 rounded-xl bg-[#C8A96E] px-4 py-2.5 text-sm font-semibold text-black hover:bg-[#d4b87f] transition-colors">
+        <button onClick={() => { setEditingPaper(null); setPaperModal(true); }} className="y-btn y-btn-primary flex items-center gap-2 transition-colors">
           <Plus size={18} /> Add Paper
         </button>
       </div>
@@ -389,7 +458,7 @@ export default function Study() {
         <EmptyState
           icon={<BookOpen size={40} />}
           message="No papers yet. Add your first ICAI CA paper to start tracking."
-          action={<button onClick={() => setPaperModal(true)} className="rounded-xl bg-[#C8A96E] px-4 py-2 text-sm font-semibold text-black hover:bg-[#d4b87f]">Add Paper</button>}
+          action={<button onClick={() => setPaperModal(true)} className="rounded-xl bg-[#E8B86D] px-4 py-2 text-sm font-semibold text-black hover:bg-[#F0C98A]">Add Paper</button>}
         />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -403,27 +472,27 @@ export default function Study() {
               <button
                 key={paper.id}
                 onClick={() => { setSelectedPaperId(paper.id); setView('paper'); }}
-                className="text-left rounded-2xl border border-zinc-800 bg-[#1A1A1A] p-5 hover:border-[#C8A96E]/30 hover:bg-zinc-900/30 transition-all"
+                className="text-left y-panel p-5 hover:border-[#E8B86D]/30 hover:bg-black/20 transition-all"
               >
                 <div className="flex items-start justify-between gap-3 mb-3">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="rounded-md bg-[#C8A96E]/10 px-2 py-0.5 text-xs font-medium text-[#C8A96E]">P{paper.number}</span>
-                      {paper.group && <span className="rounded-md bg-zinc-800 px-2 py-0.5 text-xs text-zinc-400">{paper.group}</span>}
+                      <span className="rounded-md bg-[#E8B86D]/10 px-2 py-0.5 text-xs font-medium text-[#E8B86D]">P{paper.number}</span>
+                      {paper.group && <span className="rounded-md bg-[#2A261F] px-2 py-0.5 text-xs text-[#A8A29A]">{paper.group}</span>}
                     </div>
-                    <h3 className="text-sm font-semibold text-zinc-100">{paper.name}</h3>
+                    <h3 className="text-sm font-semibold text-[#F5F0E8]">{paper.name}</h3>
                   </div>
                   <div className="text-right">
-                    <div className="text-xl font-bold text-[#C8A96E]">{score}%</div>
+                    <div className="text-xl font-bold text-[#E8B86D]">{score}%</div>
                   </div>
                 </div>
-                <div className="flex items-center gap-4 text-xs text-zinc-500">
+                <div className="flex items-center gap-4 text-xs text-[#F7F1E7]0">
                   <span className="flex items-center gap-1"><BookOpen size={12} /> {paperChapters.length} chapters</span>
                   <span className="flex items-center gap-1"><CheckCircle2 size={12} /> {completed} done</span>
                   <span className="flex items-center gap-1"><Clock size={12} /> {formatTime(paperChapters.reduce((s, c) => s + c.time_spent, 0))}</span>
                 </div>
-                <div className="mt-3 h-1.5 rounded-full bg-zinc-800 overflow-hidden">
-                  <div className="h-full bg-[#C8A96E] rounded-full transition-all" style={{ width: `${score}%` }} />
+                <div className="mt-3 h-1.5 rounded-full bg-[#2A261F] overflow-hidden">
+                  <div className="h-full bg-[#E8B86D] rounded-full transition-all" style={{ width: `${score}%` }} />
                 </div>
               </button>
             );
@@ -447,12 +516,12 @@ export default function Study() {
 
 function ChapterStat({ icon, label, value, color }: { icon: React.ReactNode; label: string; value: React.ReactNode; color: string }) {
   return (
-    <div className="rounded-xl bg-zinc-900/50 p-3">
+    <div className="rounded-xl bg-black/25 p-3">
       <div className="flex items-center gap-1.5 mb-1">
         <span style={{ color }}>{icon}</span>
-        <span className="text-[10px] text-zinc-500">{label}</span>
+        <span className="text-[10px] text-[#F7F1E7]0">{label}</span>
       </div>
-      <div className="text-sm font-bold text-zinc-100">{value}</div>
+      <div className="text-sm font-bold text-[#F5F0E8]">{value}</div>
     </div>
   );
 }
@@ -484,24 +553,24 @@ function PaperModal({ open, editing, level, onClose, onSaved }: { open: boolean;
     <Modal open={open} onClose={onClose} title={editing ? 'Edit Paper' : 'Add Paper'}>
       <div className="space-y-4">
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-zinc-300">Paper Number</label>
-          <input type="number" min={1} value={number} onChange={e => setNumber(+e.target.value)} className="w-full rounded-xl border border-zinc-700 bg-[#0D0D0D] px-4 py-2.5 text-zinc-100 outline-none focus:border-[#C8A96E]" />
+          <label className="mb-1.5 block text-sm font-medium text-[#D6CFC4]">Paper Number</label>
+          <input type="number" min={1} value={number} onChange={e => setNumber(+e.target.value)} className="w-full rounded-xl border border-[rgba(255,236,200,0.1)] bg-[#0F0E0C] px-4 py-2.5 text-[#F5F0E8] outline-none focus:border-[#E8B86D]" />
         </div>
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-zinc-300">Paper Name</label>
-          <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Principles of Accounting" className="w-full rounded-xl border border-zinc-700 bg-[#0D0D0D] px-4 py-2.5 text-zinc-100 outline-none focus:border-[#C8A96E]" />
+          <label className="mb-1.5 block text-sm font-medium text-[#D6CFC4]">Paper Name</label>
+          <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Principles of Accounting" className="w-full rounded-xl border border-[rgba(255,236,200,0.1)] bg-[#0F0E0C] px-4 py-2.5 text-[#F5F0E8] outline-none focus:border-[#E8B86D]" />
         </div>
         {level !== 'Foundation' && (
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-zinc-300">Group</label>
+            <label className="mb-1.5 block text-sm font-medium text-[#D6CFC4]">Group</label>
             <div className="grid grid-cols-2 gap-2">
               {['G1', 'G2'].map(g => (
-                <button key={g} onClick={() => setGrp(g)} className={`rounded-xl border px-3 py-2 text-sm font-medium ${grp === g ? 'border-[#C8A96E] bg-[#C8A96E]/10 text-[#C8A96E]' : 'border-zinc-700 text-zinc-400'}`}>{g}</button>
+                <button key={g} onClick={() => setGrp(g)} className={`rounded-xl border px-3 py-2 text-sm font-medium ${grp === g ? 'border-[#E8B86D] bg-[#E8B86D]/10 text-[#E8B86D]' : 'border-[rgba(255,236,200,0.1)] text-[#A8A29A]'}`}>{g}</button>
               ))}
             </div>
           </div>
         )}
-        <button onClick={save} disabled={!name.trim()} className="w-full rounded-xl bg-[#C8A96E] px-4 py-2.5 text-sm font-semibold text-black hover:bg-[#d4b87f] disabled:opacity-40">{editing ? 'Save Changes' : 'Add Paper'}</button>
+        <button onClick={save} disabled={!name.trim()} className="y-btn y-btn-primary w-full disabled:opacity-40">{editing ? 'Save Changes' : 'Add Paper'}</button>
       </div>
     </Modal>
   );
@@ -552,60 +621,60 @@ function ChapterModal({ open, editing, paperId, onClose, onSaved }: { open: bool
     <Modal open={open} onClose={onClose} title={editing ? 'Edit Chapter' : 'Add Chapter'}>
       <div className="space-y-4">
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-zinc-300">Chapter Name</label>
-          <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Partnership Accounts" className="w-full rounded-xl border border-zinc-700 bg-[#0D0D0D] px-4 py-2.5 text-zinc-100 outline-none focus:border-[#C8A96E]" />
+          <label className="mb-1.5 block text-sm font-medium text-[#D6CFC4]">Chapter Name</label>
+          <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Partnership Accounts" className="w-full rounded-xl border border-[rgba(255,236,200,0.1)] bg-[#0F0E0C] px-4 py-2.5 text-[#F5F0E8] outline-none focus:border-[#E8B86D]" />
         </div>
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-zinc-300">Difficulty</label>
+          <label className="mb-1.5 block text-sm font-medium text-[#D6CFC4]">Difficulty</label>
           <div className="flex gap-1">
             {[1, 2, 3, 4, 5].map(n => (
               <button key={n} onClick={() => setDifficulty(n)} className="p-1">
-                <Star size={22} className={n <= difficulty ? 'fill-[#C8A96E] text-[#C8A96E]' : 'text-zinc-700'} />
+                <Star size={22} className={n <= difficulty ? 'fill-[#E8B86D] text-[#E8B86D]' : 'text-[#5C574F]'} />
               </button>
             ))}
           </div>
         </div>
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-zinc-300">Status</label>
+          <label className="mb-1.5 block text-sm font-medium text-[#D6CFC4]">Status</label>
           <div className="grid grid-cols-3 gap-2">
             {(['not_started', 'in_progress', 'completed'] as const).map(s => (
-              <button key={s} onClick={() => setStatus(s)} className={`rounded-xl border px-3 py-2 text-xs font-medium capitalize ${status === s ? 'border-[#C8A96E] bg-[#C8A96E]/10 text-[#C8A96E]' : 'border-zinc-700 text-zinc-400'}`}>{s.replace('_', ' ')}</button>
+              <button key={s} onClick={() => setStatus(s)} className={`rounded-xl border px-3 py-2 text-xs font-medium capitalize ${status === s ? 'border-[#E8B86D] bg-[#E8B86D]/10 text-[#E8B86D]' : 'border-[rgba(255,236,200,0.1)] text-[#A8A29A]'}`}>{s.replace('_', ' ')}</button>
             ))}
           </div>
         </div>
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-zinc-300">Completion: {completion}%</label>
-          <input type="range" min={0} max={100} value={completion} onChange={e => setCompletion(+e.target.value)} className="w-full accent-[#C8A96E]" />
+          <label className="mb-1.5 block text-sm font-medium text-[#D6CFC4]">Completion: {completion}%</label>
+          <input type="range" min={0} max={100} value={completion} onChange={e => setCompletion(+e.target.value)} className="w-full accent-[#E8B86D]" />
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-zinc-300">Time Spent (min)</label>
-            <input type="number" value={timeSpent} onChange={e => setTimeSpent(+e.target.value)} className="w-full rounded-xl border border-zinc-700 bg-[#0D0D0D] px-3 py-2.5 text-zinc-100 outline-none focus:border-[#C8A96E]" />
+            <label className="mb-1.5 block text-sm font-medium text-[#D6CFC4]">Time Spent (min)</label>
+            <input type="number" value={timeSpent} onChange={e => setTimeSpent(+e.target.value)} className="w-full rounded-xl border border-[rgba(255,236,200,0.1)] bg-[#0F0E0C] px-3 py-2.5 text-[#F5F0E8] outline-none focus:border-[#E8B86D]" />
           </div>
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-zinc-300">Revisions</label>
+            <label className="mb-1.5 block text-sm font-medium text-[#D6CFC4]">Revisions</label>
             <div className="flex items-center gap-2">
-              <button onClick={() => setRevisionCount(Math.max(0, revisionCount - 1))} className="rounded-lg border border-zinc-700 px-3 py-2 text-zinc-300">-</button>
-              <span className="flex-1 text-center text-zinc-100">{revisionCount}</span>
-              <button onClick={() => setRevisionCount(revisionCount + 1)} className="rounded-lg border border-zinc-700 px-3 py-2 text-zinc-300">+</button>
+              <button onClick={() => setRevisionCount(Math.max(0, revisionCount - 1))} className="rounded-lg border border-[rgba(255,236,200,0.1)] px-3 py-2 text-[#D6CFC4]">-</button>
+              <span className="flex-1 text-center text-[#F5F0E8]">{revisionCount}</span>
+              <button onClick={() => setRevisionCount(revisionCount + 1)} className="rounded-lg border border-[rgba(255,236,200,0.1)] px-3 py-2 text-[#D6CFC4]">+</button>
             </div>
           </div>
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-zinc-300">Marks Obtained</label>
-            <input type="number" value={marksObtained} onChange={e => setMarksObtained(+e.target.value)} className="w-full rounded-xl border border-zinc-700 bg-[#0D0D0D] px-3 py-2.5 text-zinc-100 outline-none focus:border-[#C8A96E]" />
+            <label className="mb-1.5 block text-sm font-medium text-[#D6CFC4]">Marks Obtained</label>
+            <input type="number" value={marksObtained} onChange={e => setMarksObtained(+e.target.value)} className="w-full rounded-xl border border-[rgba(255,236,200,0.1)] bg-[#0F0E0C] px-3 py-2.5 text-[#F5F0E8] outline-none focus:border-[#E8B86D]" />
           </div>
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-zinc-300">Marks Total</label>
-            <input type="number" value={marksTotal} onChange={e => setMarksTotal(+e.target.value)} className="w-full rounded-xl border border-zinc-700 bg-[#0D0D0D] px-3 py-2.5 text-zinc-100 outline-none focus:border-[#C8A96E]" />
+            <label className="mb-1.5 block text-sm font-medium text-[#D6CFC4]">Marks Total</label>
+            <input type="number" value={marksTotal} onChange={e => setMarksTotal(+e.target.value)} className="w-full rounded-xl border border-[rgba(255,236,200,0.1)] bg-[#0F0E0C] px-3 py-2.5 text-[#F5F0E8] outline-none focus:border-[#E8B86D]" />
           </div>
         </div>
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-zinc-300">Notes</label>
-          <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3} placeholder="Chapter notes..." className="w-full rounded-xl border border-zinc-700 bg-[#0D0D0D] px-4 py-2.5 text-zinc-100 outline-none focus:border-[#C8A96E] resize-none" />
+          <label className="mb-1.5 block text-sm font-medium text-[#D6CFC4]">Notes</label>
+          <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3} placeholder="Chapter notes..." className="w-full rounded-xl border border-[rgba(255,236,200,0.1)] bg-[#0F0E0C] px-4 py-2.5 text-[#F5F0E8] outline-none focus:border-[#E8B86D] resize-none" />
         </div>
-        <button onClick={save} disabled={!name.trim()} className="w-full rounded-xl bg-[#C8A96E] px-4 py-2.5 text-sm font-semibold text-black hover:bg-[#d4b87f] disabled:opacity-40">{editing ? 'Save Changes' : 'Add Chapter'}</button>
+        <button onClick={save} disabled={!name.trim()} className="y-btn y-btn-primary w-full disabled:opacity-40">{editing ? 'Save Changes' : 'Add Chapter'}</button>
       </div>
     </Modal>
   );
@@ -640,22 +709,22 @@ function LessonModal({ open, editing, chapterId, onClose, onSaved }: { open: boo
     <Modal open={open} onClose={onClose} title={editing ? 'Edit Lesson' : 'Add Lesson'} maxWidth="max-w-md">
       <div className="space-y-4">
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-zinc-300">Lesson Name</label>
-          <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Goodwill Valuation" className="w-full rounded-xl border border-zinc-700 bg-[#0D0D0D] px-4 py-2.5 text-zinc-100 outline-none focus:border-[#C8A96E]" />
+          <label className="mb-1.5 block text-sm font-medium text-[#D6CFC4]">Lesson Name</label>
+          <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Goodwill Valuation" className="w-full rounded-xl border border-[rgba(255,236,200,0.1)] bg-[#0F0E0C] px-4 py-2.5 text-[#F5F0E8] outline-none focus:border-[#E8B86D]" />
         </div>
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-zinc-300">Completion: {completion}%</label>
-          <input type="range" min={0} max={100} value={completion} onChange={e => setCompletion(+e.target.value)} className="w-full accent-[#C8A96E]" />
+          <label className="mb-1.5 block text-sm font-medium text-[#D6CFC4]">Completion: {completion}%</label>
+          <input type="range" min={0} max={100} value={completion} onChange={e => setCompletion(+e.target.value)} className="w-full accent-[#E8B86D]" />
         </div>
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-zinc-300">Time Spent (minutes)</label>
-          <input type="number" min={0} value={timeSpent} onChange={e => setTimeSpent(+e.target.value)} className="w-full rounded-xl border border-zinc-700 bg-[#0D0D0D] px-4 py-2.5 text-zinc-100 outline-none focus:border-[#C8A96E]" />
+          <label className="mb-1.5 block text-sm font-medium text-[#D6CFC4]">Time Spent (minutes)</label>
+          <input type="number" min={0} value={timeSpent} onChange={e => setTimeSpent(+e.target.value)} className="w-full rounded-xl border border-[rgba(255,236,200,0.1)] bg-[#0F0E0C] px-4 py-2.5 text-[#F5F0E8] outline-none focus:border-[#E8B86D]" />
         </div>
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-zinc-300">Notes</label>
-          <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3} placeholder="Lesson notes..." className="w-full rounded-xl border border-zinc-700 bg-[#0D0D0D] px-4 py-2.5 text-sm text-zinc-200 outline-none focus:border-[#C8A96E] resize-none" />
+          <label className="mb-1.5 block text-sm font-medium text-[#D6CFC4]">Notes</label>
+          <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3} placeholder="Lesson notes..." className="w-full rounded-xl border border-[rgba(255,236,200,0.1)] bg-[#0F0E0C] px-4 py-2.5 text-sm text-[#EDE6DA] outline-none focus:border-[#E8B86D] resize-none" />
         </div>
-        <button onClick={save} disabled={!name.trim()} className="w-full rounded-xl bg-[#C8A96E] px-4 py-2.5 text-sm font-semibold text-black hover:bg-[#d4b87f] disabled:opacity-40">{editing ? 'Save Changes' : 'Add Lesson'}</button>
+        <button onClick={save} disabled={!name.trim()} className="y-btn y-btn-primary w-full disabled:opacity-40">{editing ? 'Save Changes' : 'Add Lesson'}</button>
       </div>
     </Modal>
   );

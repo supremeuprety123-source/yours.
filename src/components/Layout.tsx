@@ -2,79 +2,74 @@ import { type ReactNode } from 'react';
 import { Home, BookOpen, CalendarClock, Wallet, BookHeart, Settings, WifiOff, RefreshCw, CheckCircle2, Cloud, AlertCircle } from 'lucide-react';
 import { useApp, type PageName } from '../contexts/AppContext';
 
-const NAV_ITEMS: { page: PageName; label: string; icon: typeof Home }[] = [
-  { page: 'home', label: 'Home', icon: Home },
-  { page: 'study', label: 'Study', icon: BookOpen },
-  { page: 'planner', label: 'Planner', icon: CalendarClock },
-  { page: 'finance', label: 'Finance', icon: Wallet },
-  { page: 'diary', label: 'Diary', icon: BookHeart },
-  { page: 'settings', label: 'Settings', icon: Settings },
+const NAV_ITEMS: { page: PageName; label: string; short: string; icon: typeof Home }[] = [
+  { page: 'home', label: 'Home', short: 'Home', icon: Home },
+  { page: 'study', label: 'Study', short: 'Study', icon: BookOpen },
+  { page: 'planner', label: 'Planner', short: 'Plan', icon: CalendarClock },
+  { page: 'finance', label: 'Finance', short: 'Cash', icon: Wallet },
+  { page: 'diary', label: 'Diary', short: 'Diary', icon: BookHeart },
+  { page: 'settings', label: 'Settings', short: 'More', icon: Settings },
 ];
 
 function SyncBadge() {
   const { online, syncStatus } = useApp();
 
+  const base = 'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10.5px] font-semibold tracking-wide border';
+
   if (!online) {
     return (
-      <div className="flex items-center gap-1.5 rounded-full bg-[#C0392B]/10 px-2.5 py-1 text-xs text-[#C0392B]">
-        <WifiOff size={12} />
-        <span>Offline</span>
+      <div className={`${base} border-[#E07A5F]/25 bg-[#E07A5F]/10 text-[#E07A5F]`}>
+        <WifiOff size={11} strokeWidth={2.4} /> Offline
       </div>
     );
   }
-
   if (syncStatus === 'syncing') {
     return (
-      <div className="flex items-center gap-1.5 rounded-full bg-[#C8A96E]/10 px-2.5 py-1 text-xs text-[#C8A96E]">
-        <RefreshCw size={12} className="animate-spin" />
-        <span>Syncing</span>
+      <div className={`${base} border-[#E8B86D]/25 bg-[#E8B86D]/10 text-[#E8B86D]`}>
+        <RefreshCw size={11} className="animate-spin" strokeWidth={2.4} /> Syncing
       </div>
     );
   }
-
   if (syncStatus === 'synced') {
     return (
-      <div className="flex items-center gap-1.5 rounded-full bg-[#4CAF7D]/10 px-2.5 py-1 text-xs text-[#4CAF7D]">
-        <CheckCircle2 size={12} />
-        <span>Synced</span>
+      <div className={`${base} border-[#8FBC8F]/25 bg-[#8FBC8F]/10 text-[#8FBC8F]`}>
+        <CheckCircle2 size={11} strokeWidth={2.4} /> Synced
       </div>
     );
   }
-
   if (syncStatus === 'error') {
     return (
-      <div className="flex items-center gap-1.5 rounded-full bg-[#C0392B]/10 px-2.5 py-1 text-xs text-[#C0392B]" title="Check if SQL has been run in Supabase">
-        <AlertCircle size={12} />
-        <span>Sync Error</span>
+      <div className={`${base} border-[#E07A5F]/25 bg-[#E07A5F]/10 text-[#E07A5F]`} title="Check Supabase SQL">
+        <AlertCircle size={11} strokeWidth={2.4} /> Error
       </div>
     );
   }
-
   return (
-    <div className="flex items-center gap-1.5 rounded-full bg-zinc-800 px-2.5 py-1 text-xs text-zinc-400">
-      <Cloud size={12} />
-      <span>Online</span>
+    <div className={`${base} border-[rgba(255,236,200,0.08)] bg-white/[0.03] text-[#8A8478]`}>
+      <Cloud size={11} strokeWidth={2.4} /> Online
     </div>
   );
 }
 
 export default function Layout({ children }: { children: ReactNode }) {
-  const { activePage, setActivePage } = useApp();
+  const { activePage, setActivePage, profile } = useApp();
 
   return (
-    <div className="flex min-h-screen bg-[#0D0D0D] text-zinc-100" style={{ fontFamily: 'DM Sans, sans-serif' }}>
-      {/* Desktop Sidebar */}
-      <aside className="hidden md:flex w-60 flex-col border-r border-zinc-800/50 bg-[#0D0D0D] fixed inset-y-0 left-0 z-30">
-        <div className="flex items-center gap-3 px-5 py-6">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl border-2 border-[#C8A96E]">
-            <span className="text-lg font-bold text-[#C8A96E]">Y</span>
-          </div>
-          <div>
-            <h1 className="text-sm font-bold tracking-widest text-[#C8A96E]">YOURS</h1>
-            <p className="text-[10px] text-zinc-500">Personal Life OS</p>
+    <div className="y-shell">
+      {/* Desktop sidebar */}
+      <aside className="y-sidebar">
+        <div className="flex items-center gap-3 px-5 pt-8 pb-6">
+          <div className="y-mark h-11 w-11 text-lg">Y</div>
+          <div className="min-w-0">
+            <div className="y-serif text-[15px] font-bold tracking-[0.14em] text-[#E8B86D]">YOURS</div>
+            <div className="text-[10.5px] text-[#6B6560] truncate mt-0.5">
+              {profile?.name ? `${profile.name} · CA ${profile.ca_level}` : 'Personal Life OS'}
+            </div>
           </div>
         </div>
-        <nav className="flex-1 px-3 py-2 space-y-1">
+
+        <nav className="flex-1 px-3 space-y-0.5">
+          <p className="y-section-label px-3 mb-2 mt-1">Navigate</p>
           {NAV_ITEMS.map(item => {
             const Icon = item.icon;
             const active = activePage === item.page;
@@ -82,59 +77,58 @@ export default function Layout({ children }: { children: ReactNode }) {
               <button
                 key={item.page}
                 onClick={() => setActivePage(item.page)}
-                className={`flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition-all ${
-                  active
-                    ? 'bg-[#C8A96E]/10 text-[#C8A96E]'
-                    : 'text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200'
-                }`}
+                className={`y-nav-item ${active ? 'y-nav-item-active' : ''}`}
               >
-                <Icon size={18} />
-                {item.label}
-                {active && <div className="ml-auto h-1.5 w-1.5 rounded-full bg-[#C8A96E]" />}
+                <Icon size={18} strokeWidth={active ? 2.25 : 1.75} />
+                <span>{item.label}</span>
               </button>
             );
           })}
         </nav>
-        <div className="px-5 py-4 border-t border-zinc-800/50">
+
+        <div className="px-5 py-5 border-t border-[rgba(255,236,200,0.05)] space-y-3">
           <SyncBadge />
+          <p className="text-[11px] leading-relaxed text-[#5C574F]">
+            Quiet focus. Steady progress.
+          </p>
         </div>
       </aside>
 
-      {/* Main Content */}
-      <main className="flex-1 md:ml-60 pb-20 md:pb-0 min-h-screen">
-        {/* Mobile top bar */}
-        <div className="md:hidden flex items-center justify-between px-4 py-3 border-b border-zinc-800/50 sticky top-0 bg-[#0D0D0D]/95 backdrop-blur z-20">
-          <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#C8A96E]">
-              <span className="text-sm font-bold text-[#C8A96E]">Y</span>
+      {/* Main */}
+      <main className="y-main">
+        <header className="y-topbar">
+          <div className="flex items-center gap-2.5">
+            <div className="y-mark h-8 w-8 text-sm">Y</div>
+            <div>
+              <div className="y-serif text-xs font-bold tracking-[0.12em] text-[#E8B86D]">YOURS</div>
             </div>
-            <span className="text-sm font-bold tracking-widest text-[#C8A96E]">YOURS</span>
           </div>
           <SyncBadge />
-        </div>
-        <div className="px-4 md:px-8 py-6 max-w-6xl mx-auto">
+        </header>
+
+        <div className="y-content y-in">
           {children}
         </div>
       </main>
 
-      {/* Mobile Bottom Bar */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 flex items-center justify-around border-t border-zinc-800/50 bg-[#0D0D0D]/95 backdrop-blur px-1 py-2 safe-bottom">
-        {NAV_ITEMS.map(item => {
-          const Icon = item.icon;
-          const active = activePage === item.page;
-          return (
-            <button
-              key={item.page}
-              onClick={() => setActivePage(item.page)}
-              className={`flex flex-col items-center gap-0.5 rounded-lg px-2 py-1.5 transition-colors ${
-                active ? 'text-[#C8A96E]' : 'text-zinc-500'
-              }`}
-            >
-              <Icon size={20} />
-              <span className="text-[10px] font-medium">{item.label}</span>
-            </button>
-          );
-        })}
+      {/* Mobile dock */}
+      <nav className="y-dock">
+        <div className="flex items-stretch px-1.5">
+          {NAV_ITEMS.map(item => {
+            const Icon = item.icon;
+            const active = activePage === item.page;
+            return (
+              <button
+                key={item.page}
+                onClick={() => setActivePage(item.page)}
+                className={`y-dock-item ${active ? 'y-dock-item-active' : ''}`}
+              >
+                <Icon size={19} strokeWidth={active ? 2.3 : 1.7} />
+                <span className="text-[9.5px] font-semibold tracking-wide">{item.short}</span>
+              </button>
+            );
+          })}
+        </div>
       </nav>
     </div>
   );

@@ -32,10 +32,11 @@ const SECTIONS = [
   { key: 'diary_entries', label: 'Diary Entries' },
   { key: 'life_notes', label: 'Life Notes' },
   { key: 'exams', label: 'Exams' },
+  { key: 'mock_scores', label: 'Mock Scores' },
 ];
 
 export default function Settings() {
-  const { profile, refreshProfile, refreshAll, online, syncStatus } = useApp();
+  const { profile, refreshProfile, refreshAll, online, syncStatus, forceSync } = useApp();
   const [exams, setExams] = useState<Exam[]>([]);
   const [examModal, setExamModal] = useState(false);
   const [editingExam, setEditingExam] = useState<Exam | null>(null);
@@ -201,21 +202,21 @@ export default function Settings() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-zinc-100">Settings</h1>
-        <p className="text-sm text-zinc-500 mt-1">Customize YOURS to fit your life</p>
+        <h1 className="y-page-title">Settings</h1>
+        <p className="text-sm text-[#F7F1E7]0 mt-1">Customize YOURS to fit your life</p>
       </div>
 
-      {savedMsg && <div className="fixed top-4 right-4 z-50 rounded-xl bg-[#4CAF7D] px-4 py-2 text-sm font-medium text-black">{savedMsg}</div>}
+      {savedMsg && <div className="fixed top-4 right-4 z-50 rounded-xl bg-[#8FBC8F] px-4 py-2 text-sm font-medium text-black">{savedMsg}</div>}
 
       {/* Profile */}
       <SettingsCard icon={<User size={18} />} title="Profile">
         <div className="space-y-3">
           <div>
-            <label className="mb-1 block text-xs text-zinc-500">Name</label>
-            <input value={profile.name} onChange={e => updateProfile({ name: e.target.value })} className="w-full rounded-xl border border-zinc-700 bg-[#0D0D0D] px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-[#C8A96E]" />
+            <label className="mb-1 block text-xs text-[#F7F1E7]0">Name</label>
+            <input value={profile.name} onChange={e => updateProfile({ name: e.target.value })} className="w-full rounded-xl border border-[rgba(255,236,200,0.1)] bg-[#0F0E0C] px-4 py-2.5 text-sm text-[#F5F0E8] outline-none focus:border-[#E8B86D]" />
           </div>
           <div>
-            <label className="mb-1 block text-xs text-zinc-500">CA Level</label>
+            <label className="mb-1 block text-xs text-[#F7F1E7]0">CA Level</label>
             <div className="grid grid-cols-3 gap-2">
               {(['Foundation','Intermediate','Final'] as CALevel[]).map(l => {
                 const levelIdx = (['Foundation','Intermediate','Final'] as CALevel[]).indexOf(l);
@@ -232,12 +233,12 @@ export default function Settings() {
                     disabled={isLocked}
                     className={`rounded-xl border px-3 py-2 text-sm font-medium flex items-center justify-center gap-1.5 ${
                       profile.ca_level === l
-                        ? 'border-[#C8A96E] bg-[#C8A96E]/10 text-[#C8A96E]'
+                        ? 'border-[#E8B86D] bg-[#E8B86D]/10 text-[#E8B86D]'
                         : isLocked
-                        ? 'border-zinc-800 text-zinc-600 cursor-not-allowed'
+                        ? 'border-[rgba(255,236,200,0.07)] text-[#6B6560] cursor-not-allowed'
                         : isPast
-                        ? 'border-[#4CAF7D]/30 text-[#4CAF7D]'
-                        : 'border-zinc-700 text-zinc-400 hover:border-zinc-600'
+                        ? 'border-[#8FBC8F]/30 text-[#8FBC8F]'
+                        : 'border-[rgba(255,236,200,0.1)] text-[#A8A29A] hover:border-[#4A453C]'
                     }`}
                   >
                     {isLocked && <Lock size={12} />}
@@ -247,7 +248,7 @@ export default function Settings() {
                 );
               })}
             </div>
-            <p className="text-[10px] text-zinc-600 mt-1">
+            <p className="text-[10px] text-[#6B6560] mt-1">
               {profile.ca_level === 'Final'
                 ? 'You are at the final level — CA Final. All the best! 🎯'
                 : 'Complete all chapters in your current level to unlock the next. Switching preserves all data — papers are filtered by level.'}
@@ -260,20 +261,20 @@ export default function Settings() {
       <SettingsCard icon={<Calendar size={18} />} title="Exams">
         <div className="space-y-2">
           {exams.length === 0 ? (
-            <p className="text-sm text-zinc-600 py-2">No exams added yet.</p>
+            <p className="text-sm text-[#6B6560] py-2">No exams added yet.</p>
           ) : (
             exams.map(ex => (
-              <div key={ex.id} className="flex items-center gap-3 rounded-lg bg-zinc-900/50 px-3 py-2">
+              <div key={ex.id} className="flex items-center gap-3 rounded-lg bg-black/25 px-3 py-2">
                 <div className="flex-1">
-                  <div className="text-sm text-zinc-200">{ex.name}</div>
-                  <div className="text-xs text-zinc-500">{formatDate(ex.date)} · {daysUntil(ex.date) >= 0 ? `${daysUntil(ex.date)} days left` : 'past'}{ex.marks_total > 0 ? ` · Scored ${ex.marks_obtained}/${ex.marks_total} (${Math.round(ex.marks_obtained/ex.marks_total*100)}%)` : ''}</div>
+                  <div className="text-sm text-[#EDE6DA]">{ex.name}</div>
+                  <div className="text-xs text-[#F7F1E7]0">{formatDate(ex.date)} · {daysUntil(ex.date) >= 0 ? `${daysUntil(ex.date)} days left` : 'past'}{ex.marks_total > 0 ? ` · Scored ${ex.marks_obtained}/${ex.marks_total} (${Math.round(ex.marks_obtained/ex.marks_total*100)}%)` : ''}</div>
                 </div>
-                <button onClick={() => { setEditingExam(ex); setExamModal(true); }} className="text-zinc-500 hover:text-zinc-300"><Edit2 size={14} /></button>
-                <button onClick={() => setDeleteExam(ex)} className="text-zinc-500 hover:text-[#C0392B]"><Trash2 size={14} /></button>
+                <button onClick={() => { setEditingExam(ex); setExamModal(true); }} className="text-[#F7F1E7]0 hover:text-[#D6CFC4]"><Edit2 size={14} /></button>
+                <button onClick={() => setDeleteExam(ex)} className="text-[#F7F1E7]0 hover:text-[#E07A5F]"><Trash2 size={14} /></button>
               </div>
             ))
           )}
-          <button onClick={() => { setEditingExam(null); setExamModal(true); }} className="flex items-center gap-1.5 text-sm text-[#C8A96E] hover:underline pt-1"><Plus size={16} /> Add Exam</button>
+          <button onClick={() => { setEditingExam(null); setExamModal(true); }} className="flex items-center gap-1.5 text-sm text-[#E8B86D] hover:underline pt-1"><Plus size={16} /> Add Exam</button>
         </div>
       </SettingsCard>
 
@@ -282,13 +283,13 @@ export default function Settings() {
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-sm text-zinc-200">PIN Lock</div>
-              <div className="text-xs text-zinc-500">Require PIN to open the app</div>
+              <div className="text-sm text-[#EDE6DA]">PIN Lock</div>
+              <div className="text-xs text-[#F7F1E7]0">Require PIN to open the app</div>
             </div>
             <Toggle on={profile.pin_enabled} onToggle={() => updateProfile({ pin_enabled: !profile.pin_enabled, pin: !profile.pin_enabled ? profile.pin || '0000' : profile.pin })} />
           </div>
           {profile.pin_enabled && (
-            <button onClick={() => setPinChange(true)} className="text-sm text-[#C8A96E] hover:underline">Change PIN</button>
+            <button onClick={() => setPinChange(true)} className="text-sm text-[#E8B86D] hover:underline">Change PIN</button>
           )}
         </div>
       </SettingsCard>
@@ -297,32 +298,32 @@ export default function Settings() {
       <SettingsCard icon={<DollarSign size={18} />} title="Currency">
         <div className="grid grid-cols-3 gap-2">
           {CURRENCIES.map(c => (
-            <button key={c.code} onClick={() => updateProfile({ currency_code: c.code, currency_symbol: c.symbol })} className={`rounded-xl border px-3 py-2 text-sm font-medium ${profile.currency_code === c.code ? 'border-[#C8A96E] bg-[#C8A96E]/10 text-[#C8A96E]' : 'border-zinc-700 text-zinc-400'}`}>
+            <button key={c.code} onClick={() => updateProfile({ currency_code: c.code, currency_symbol: c.symbol })} className={`rounded-xl border px-3 py-2 text-sm font-medium ${profile.currency_code === c.code ? 'border-[#E8B86D] bg-[#E8B86D]/10 text-[#E8B86D]' : 'border-[rgba(255,236,200,0.1)] text-[#A8A29A]'}`}>
               <span className="text-base">{c.symbol}</span> {c.code}
             </button>
           ))}
         </div>
-        <p className="text-[10px] text-zinc-600 mt-2">Display-only change. Existing transactions keep their original amounts.</p>
+        <p className="text-[10px] text-[#6B6560] mt-2">Display-only change. Existing transactions keep their original amounts.</p>
       </SettingsCard>
 
       {/* Focus Timer */}
       <SettingsCard icon={<Timer size={18} />} title="Focus Timer Durations">
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="mb-1 block text-xs text-zinc-500">Pomodoro (min)</label>
-            <input type="number" value={profile.focus_pomodoro} onChange={e => updateProfile({ focus_pomodoro: +e.target.value })} className="w-full rounded-xl border border-zinc-700 bg-[#0D0D0D] px-3 py-2 text-sm text-zinc-100 outline-none focus:border-[#C8A96E]" />
+            <label className="mb-1 block text-xs text-[#F7F1E7]0">Pomodoro (min)</label>
+            <input type="number" value={profile.focus_pomodoro} onChange={e => updateProfile({ focus_pomodoro: +e.target.value })} className="w-full rounded-xl border border-[rgba(255,236,200,0.1)] bg-[#0F0E0C] px-3 py-2 text-sm text-[#F5F0E8] outline-none focus:border-[#E8B86D]" />
           </div>
           <div>
-            <label className="mb-1 block text-xs text-zinc-500">Short Break (min)</label>
-            <input type="number" value={profile.focus_short_break} onChange={e => updateProfile({ focus_short_break: +e.target.value })} className="w-full rounded-xl border border-zinc-700 bg-[#0D0D0D] px-3 py-2 text-sm text-zinc-100 outline-none focus:border-[#C8A96E]" />
+            <label className="mb-1 block text-xs text-[#F7F1E7]0">Short Break (min)</label>
+            <input type="number" value={profile.focus_short_break} onChange={e => updateProfile({ focus_short_break: +e.target.value })} className="w-full rounded-xl border border-[rgba(255,236,200,0.1)] bg-[#0F0E0C] px-3 py-2 text-sm text-[#F5F0E8] outline-none focus:border-[#E8B86D]" />
           </div>
           <div>
-            <label className="mb-1 block text-xs text-zinc-500">Long Break (min)</label>
-            <input type="number" value={profile.focus_long_break} onChange={e => updateProfile({ focus_long_break: +e.target.value })} className="w-full rounded-xl border border-zinc-700 bg-[#0D0D0D] px-3 py-2 text-sm text-zinc-100 outline-none focus:border-[#C8A96E]" />
+            <label className="mb-1 block text-xs text-[#F7F1E7]0">Long Break (min)</label>
+            <input type="number" value={profile.focus_long_break} onChange={e => updateProfile({ focus_long_break: +e.target.value })} className="w-full rounded-xl border border-[rgba(255,236,200,0.1)] bg-[#0F0E0C] px-3 py-2 text-sm text-[#F5F0E8] outline-none focus:border-[#E8B86D]" />
           </div>
           <div>
-            <label className="mb-1 block text-xs text-zinc-500">Daily Target (min)</label>
-            <input type="number" value={profile.focus_target} onChange={e => updateProfile({ focus_target: +e.target.value })} className="w-full rounded-xl border border-zinc-700 bg-[#0D0D0D] px-3 py-2 text-sm text-zinc-100 outline-none focus:border-[#C8A96E]" />
+            <label className="mb-1 block text-xs text-[#F7F1E7]0">Daily Target (min)</label>
+            <input type="number" value={profile.focus_target} onChange={e => updateProfile({ focus_target: +e.target.value })} className="w-full rounded-xl border border-[rgba(255,236,200,0.1)] bg-[#0F0E0C] px-3 py-2 text-sm text-[#F5F0E8] outline-none focus:border-[#E8B86D]" />
           </div>
         </div>
       </SettingsCard>
@@ -338,8 +339,8 @@ export default function Settings() {
           ].map(n => (
             <div key={n.key} className="flex items-center justify-between">
               <div>
-                <div className="text-sm text-zinc-200">{n.label}</div>
-                <div className="text-xs text-zinc-500">{n.desc}</div>
+                <div className="text-sm text-[#EDE6DA]">{n.label}</div>
+                <div className="text-xs text-[#F7F1E7]0">{n.desc}</div>
               </div>
               <Toggle on={profile.notifications[n.key as keyof typeof profile.notifications]} onToggle={() => updateProfile({ notifications: { ...profile.notifications, [n.key]: !profile.notifications[n.key as keyof typeof profile.notifications] } })} />
             </div>
@@ -351,52 +352,52 @@ export default function Settings() {
       <SettingsCard icon={<RefreshCw size={18} />} title="Sync Status">
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-sm text-zinc-300">Connection</span>
-            <span className={`text-sm font-medium ${online ? 'text-[#4CAF7D]' : 'text-[#C0392B]'}`}>{online ? 'Online' : 'Offline'}</span>
+            <span className="text-sm text-[#D6CFC4]">Connection</span>
+            <span className={`text-sm font-medium ${online ? 'text-[#8FBC8F]' : 'text-[#E07A5F]'}`}>{online ? 'Online' : 'Offline'}</span>
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-sm text-zinc-300">Sync Status</span>
-            <span className={`text-sm font-medium capitalize ${syncStatus === 'error' ? 'text-[#C0392B]' : syncStatus === 'synced' ? 'text-[#4CAF7D]' : 'text-zinc-400'}`}>{syncStatus}</span>
+            <span className="text-sm text-[#D6CFC4]">Sync Status</span>
+            <span className={`text-sm font-medium capitalize ${syncStatus === 'error' ? 'text-[#E07A5F]' : syncStatus === 'synced' ? 'text-[#8FBC8F]' : 'text-[#A8A29A]'}`}>{syncStatus}</span>
           </div>
           {syncStatus === 'error' && (
-            <div className="rounded-xl border border-[#C0392B]/30 bg-[#C0392B]/5 p-3">
+            <div className="rounded-xl border border-[#E07A5F]/30 bg-[#E07A5F]/5 p-3">
               <div className="flex items-start gap-2">
-                <AlertCircle size={16} className="text-[#C0392B] mt-0.5 flex-shrink-0" />
-                <div className="text-xs text-zinc-400">
-                  <p className="font-medium text-[#C0392B] mb-1">Sync failed — run diagnostic below</p>
+                <AlertCircle size={16} className="text-[#E07A5F] mt-0.5 flex-shrink-0" />
+                <div className="text-xs text-[#A8A29A]">
+                  <p className="font-medium text-[#E07A5F] mb-1">Sync failed — run diagnostic below</p>
                   <p>Click "Run Diagnostic" to see the exact error and fix it.</p>
                 </div>
               </div>
             </div>
           )}
-          <button onClick={() => { pullFromCloud().then(() => doSync()); }} disabled={!online} className="w-full rounded-xl border border-zinc-700 py-2.5 text-sm font-medium text-zinc-300 hover:bg-zinc-800 disabled:opacity-40">
+          <button onClick={() => forceSync()} disabled={!online} className="w-full rounded-xl border border-[rgba(255,236,200,0.1)] py-2.5 text-sm font-medium text-[#D6CFC4] hover:bg-[#2A261F] disabled:opacity-40">
             Sync Now
           </button>
-          <button onClick={runDiagnostic} disabled={diagRunning} className="w-full rounded-xl bg-zinc-800 py-2.5 text-sm font-medium text-zinc-300 hover:bg-zinc-700 disabled:opacity-40">
+          <button onClick={runDiagnostic} disabled={diagRunning} className="w-full rounded-xl bg-[#2A261F] py-2.5 text-sm font-medium text-[#D6CFC4] hover:bg-zinc-700 disabled:opacity-40">
             {diagRunning ? 'Running...' : 'Run Diagnostic'}
           </button>
           {diagResult && (
-            <pre className="mt-2 rounded-xl border border-zinc-800 bg-[#0D0D0D] p-3 text-[11px] text-zinc-400 whitespace-pre-wrap overflow-x-auto max-h-64 overflow-y-auto">{diagResult}</pre>
+            <pre className="mt-2 rounded-xl border border-[rgba(255,236,200,0.07)] bg-[#0F0E0C] p-3 text-[11px] text-[#A8A29A] whitespace-pre-wrap overflow-x-auto max-h-64 overflow-y-auto">{diagResult}</pre>
           )}
         </div>
       </SettingsCard>
 
       {/* Export */}
       <SettingsCard icon={<Download size={18} />} title="Data Export">
-        <p className="text-xs text-zinc-500 mb-3">Export selected sections as a single JSON file.</p>
-        <button onClick={() => { setExportSections(Object.fromEntries(SECTIONS.map(s => [s.key, true]))); setExportModal(true); }} className="w-full rounded-xl bg-[#C8A96E] py-2.5 text-sm font-semibold text-black hover:bg-[#d4b87f]">
+        <p className="text-xs text-[#F7F1E7]0 mb-3">Export selected sections as a single JSON file.</p>
+        <button onClick={() => { setExportSections(Object.fromEntries(SECTIONS.map(s => [s.key, true]))); setExportModal(true); }} className="w-full rounded-xl bg-[#E8B86D] py-2.5 text-sm font-semibold text-black hover:bg-[#F0C98A]">
           Export Data
         </button>
       </SettingsCard>
 
       {/* About */}
       <SettingsCard icon={<Info size={18} />} title="About">
-        <div className="space-y-1 text-sm text-zinc-400">
-          <div className="flex justify-between"><span>App</span><span className="text-zinc-300">YOURS — Personal Life OS</span></div>
-          <div className="flex justify-between"><span>Built for</span><span className="text-zinc-300">Supreme Uprety</span></div>
-          <div className="flex justify-between"><span>Version</span><span className="text-zinc-300">1.0.0</span></div>
-          <div className="flex justify-between"><span>Storage</span><span className="text-zinc-300">IndexedDB + Supabase</span></div>
-          <p className="text-xs text-zinc-600 pt-2 border-t border-zinc-800 mt-2">One app, one life, no excuses.</p>
+        <div className="space-y-1 text-sm text-[#A8A29A]">
+          <div className="flex justify-between"><span>App</span><span className="text-[#D6CFC4]">YOURS — Personal Life OS</span></div>
+          <div className="flex justify-between"><span>Built for</span><span className="text-[#D6CFC4]">Supreme Uprety</span></div>
+          <div className="flex justify-between"><span>Version</span><span className="text-[#D6CFC4]">1.0.0</span></div>
+          <div className="flex justify-between"><span>Storage</span><span className="text-[#D6CFC4]">IndexedDB + Supabase</span></div>
+          <p className="text-xs text-[#6B6560] pt-2 border-t border-[rgba(255,236,200,0.07)] mt-2">One app, one life, no excuses.</p>
         </div>
       </SettingsCard>
 
@@ -407,8 +408,8 @@ export default function Settings() {
       {pinChange && (
         <Modal open={pinChange} onClose={() => setPinChange(false)} title="Change PIN" maxWidth="max-w-sm">
           <div className="space-y-4">
-            <input type="tel" maxLength={4} value={newPin} onChange={e => setNewPin(e.target.value.replace(/\D/g, ''))} placeholder="New 4-digit PIN" className="w-full rounded-xl border border-zinc-700 bg-[#0D0D0D] px-4 py-3 text-center text-2xl tracking-[0.5em] text-zinc-100 outline-none focus:border-[#C8A96E]" />
-            <button onClick={handlePinChange} disabled={newPin.length !== 4} className="w-full rounded-xl bg-[#C8A96E] py-2.5 text-sm font-semibold text-black hover:bg-[#d4b87f] disabled:opacity-40">Update PIN</button>
+            <input type="tel" maxLength={4} value={newPin} onChange={e => setNewPin(e.target.value.replace(/\D/g, ''))} placeholder="New 4-digit PIN" className="w-full rounded-xl border border-[rgba(255,236,200,0.1)] bg-[#0F0E0C] px-4 py-3 text-center text-2xl tracking-[0.5em] text-[#F5F0E8] outline-none focus:border-[#E8B86D]" />
+            <button onClick={handlePinChange} disabled={newPin.length !== 4} className="w-full rounded-xl bg-[#E8B86D] py-2.5 text-sm font-semibold text-black hover:bg-[#F0C98A] disabled:opacity-40">Update PIN</button>
           </div>
         </Modal>
       )}
@@ -417,17 +418,17 @@ export default function Settings() {
       {exportModal && (
         <Modal open={exportModal} onClose={() => setExportModal(false)} title="Export Data" maxWidth="max-w-md">
           <div className="space-y-3">
-            <p className="text-sm text-zinc-400">Select sections to export:</p>
+            <p className="text-sm text-[#A8A29A]">Select sections to export:</p>
             <div className="space-y-2 max-h-64 overflow-y-auto">
               {SECTIONS.map(s => (
-                <label key={s.key} className="flex items-center gap-3 rounded-lg bg-zinc-900/50 px-3 py-2 cursor-pointer">
-                  <input type="checkbox" checked={exportSections[s.key] || false} onChange={e => setExportSections(prev => ({ ...prev, [s.key]: e.target.checked }))} className="accent-[#C8A96E]" />
-                  <span className="text-sm text-zinc-300">{s.label}</span>
+                <label key={s.key} className="flex items-center gap-3 rounded-lg bg-black/25 px-3 py-2 cursor-pointer">
+                  <input type="checkbox" checked={exportSections[s.key] || false} onChange={e => setExportSections(prev => ({ ...prev, [s.key]: e.target.checked }))} className="accent-[#E8B86D]" />
+                  <span className="text-sm text-[#D6CFC4]">{s.label}</span>
                 </label>
               ))}
             </div>
-            {exportResult && <p className="text-sm text-[#4CAF7D] flex items-center gap-1"><Check size={16} /> {exportResult}</p>}
-            <button onClick={handleExport} className="w-full rounded-xl bg-[#C8A96E] py-2.5 text-sm font-semibold text-black hover:bg-[#d4b87f]">Download JSON</button>
+            {exportResult && <p className="text-sm text-[#8FBC8F] flex items-center gap-1"><Check size={16} /> {exportResult}</p>}
+            <button onClick={handleExport} className="w-full rounded-xl bg-[#E8B86D] py-2.5 text-sm font-semibold text-black hover:bg-[#F0C98A]">Download JSON</button>
           </div>
         </Modal>
       )}
@@ -439,10 +440,10 @@ export default function Settings() {
 
 function SettingsCard({ icon, title, children }: { icon: React.ReactNode; title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-2xl border border-zinc-800 bg-[#1A1A1A] p-5">
+    <div className="y-panel p-5">
       <div className="flex items-center gap-2 mb-4">
-        <span className="text-[#C8A96E]">{icon}</span>
-        <h3 className="text-sm font-semibold text-zinc-200">{title}</h3>
+        <span className="text-[#E8B86D]">{icon}</span>
+        <h3 className="text-sm font-semibold text-[#EDE6DA]">{title}</h3>
       </div>
       {children}
     </div>
@@ -451,7 +452,7 @@ function SettingsCard({ icon, title, children }: { icon: React.ReactNode; title:
 
 function Toggle({ on, onToggle }: { on: boolean; onToggle: () => void }) {
   return (
-    <button onClick={onToggle} className={`relative h-6 w-11 rounded-full transition-colors ${on ? 'bg-[#C8A96E]' : 'bg-zinc-700'}`}>
+    <button onClick={onToggle} className={`relative h-6 w-11 rounded-full transition-colors ${on ? 'bg-[#E8B86D]' : 'bg-zinc-700'}`}>
       <div className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform ${on ? 'translate-x-5' : 'translate-x-0.5'}`} />
     </button>
   );
@@ -471,25 +472,25 @@ function ExamModal({ open, editing, onClose, onSave }: { open: boolean; editing:
     <Modal open={open} onClose={onClose} title={editing ? 'Edit Exam' : 'Add Exam'} maxWidth="max-w-sm">
       <div className="space-y-4">
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-zinc-300">Exam Name</label>
-          <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. CA Inter Group I Exam" className="w-full rounded-xl border border-zinc-700 bg-[#0D0D0D] px-4 py-2.5 text-zinc-100 outline-none focus:border-[#C8A96E]" />
+          <label className="mb-1.5 block text-sm font-medium text-[#D6CFC4]">Exam Name</label>
+          <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. CA Inter Group I Exam" className="w-full rounded-xl border border-[rgba(255,236,200,0.1)] bg-[#0F0E0C] px-4 py-2.5 text-[#F5F0E8] outline-none focus:border-[#E8B86D]" />
         </div>
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-zinc-300">Exam Date</label>
-          <input type="date" value={date} onChange={e => setDate(e.target.value)} className="w-full rounded-xl border border-zinc-700 bg-[#0D0D0D] px-4 py-2.5 text-zinc-100 outline-none focus:border-[#C8A96E]" />
+          <label className="mb-1.5 block text-sm font-medium text-[#D6CFC4]">Exam Date</label>
+          <input type="date" value={date} onChange={e => setDate(e.target.value)} className="w-full rounded-xl border border-[rgba(255,236,200,0.1)] bg-[#0F0E0C] px-4 py-2.5 text-[#F5F0E8] outline-none focus:border-[#E8B86D]" />
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-zinc-300">Marks Obtained</label>
-            <input type="number" value={marksObtained} onChange={e => setMarksObtained(+e.target.value)} placeholder="—" className="w-full rounded-xl border border-zinc-700 bg-[#0D0D0D] px-4 py-2.5 text-zinc-100 outline-none focus:border-[#C8A96E]" />
+            <label className="mb-1.5 block text-sm font-medium text-[#D6CFC4]">Marks Obtained</label>
+            <input type="number" value={marksObtained} onChange={e => setMarksObtained(+e.target.value)} placeholder="—" className="w-full rounded-xl border border-[rgba(255,236,200,0.1)] bg-[#0F0E0C] px-4 py-2.5 text-[#F5F0E8] outline-none focus:border-[#E8B86D]" />
           </div>
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-zinc-300">Marks Total</label>
-            <input type="number" value={marksTotal} onChange={e => setMarksTotal(+e.target.value)} placeholder="—" className="w-full rounded-xl border border-zinc-700 bg-[#0D0D0D] px-4 py-2.5 text-zinc-100 outline-none focus:border-[#C8A96E]" />
+            <label className="mb-1.5 block text-sm font-medium text-[#D6CFC4]">Marks Total</label>
+            <input type="number" value={marksTotal} onChange={e => setMarksTotal(+e.target.value)} placeholder="—" className="w-full rounded-xl border border-[rgba(255,236,200,0.1)] bg-[#0F0E0C] px-4 py-2.5 text-[#F5F0E8] outline-none focus:border-[#E8B86D]" />
           </div>
         </div>
-        <p className="text-xs text-zinc-500">Leave marks blank until results are out, then fill them in.</p>
-        <button onClick={() => name.trim() && onSave(name.trim(), date, +marksObtained || 0, +marksTotal || 0)} disabled={!name.trim() || !date} className="w-full rounded-xl bg-[#C8A96E] py-2.5 text-sm font-semibold text-black hover:bg-[#d4b87f] disabled:opacity-40">{editing ? 'Save Changes' : 'Add Exam'}</button>
+        <p className="text-xs text-[#F7F1E7]0">Leave marks blank until results are out, then fill them in.</p>
+        <button onClick={() => name.trim() && onSave(name.trim(), date, +marksObtained || 0, +marksTotal || 0)} disabled={!name.trim() || !date} className="w-full rounded-xl bg-[#E8B86D] py-2.5 text-sm font-semibold text-black hover:bg-[#F0C98A] disabled:opacity-40">{editing ? 'Save Changes' : 'Add Exam'}</button>
       </div>
     </Modal>
   );

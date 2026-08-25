@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
 import { db } from '../lib/db';
-import { doSync, pullFromCloud, setSyncCallback, triggerSync } from '../lib/sync';
+import { doSync, pullFromCloud, setSyncCallback, triggerSync, fullSync } from '../lib/sync';
 import type { Profile } from '../lib/types';
 
 export type PageName = 'home' | 'study' | 'planner' | 'finance' | 'diary' | 'settings';
@@ -16,9 +16,11 @@ interface AppContextType {
   refreshKey: number;
   setActivePage: (p: PageName) => void;
   setLocked: (v: boolean) => void;
+  unlockAndSync: () => Promise<void>;
   refreshProfile: () => Promise<void>;
   refreshAll: () => void;
   completeSetup: (profile: Profile) => void;
+  forceSync: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | null>(null);
@@ -45,6 +47,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     } else {
       setNeedsSetup(true);
+      setLocked(false);
     }
   }, []);
 
@@ -59,40 +62,83 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setLocked(p.pin_enabled);
   }, []);
 
+  /** Called after successful PIN unlock — pull cloud data then refresh UI */
+  const unlockAndSync = useCallback(async () => {
+    setLocked(false);
+    if (navigator.onLine) {
+      try {
+        await fullSync();
+        await refreshProfile();
+        setRefreshKey(k => k + 1);
+      } catch (e) {
+        console.error('[app] unlock sync failed:', e);
+      }
+    }
+  }, [refreshProfile]);
+
+  const forceSync = useCallback(async () => {
+    if (!navigator.onLine) return;
+    await fullSync();
+    await refreshProfile();
+    setRefreshKey(k => k + 1);
+  }, [refreshProfile]);
+
   useEffect(() => {
     setSyncCallback(setSyncStatus);
-    refreshProfile().finally(() => {
+
+    (async () => {
+      // Load local profile first so lock screen can show quickly
+      await refreshProfile();
       hasInitialized.current = true;
       setLoading(false);
-    });
+
+      // Then pull from cloud in background (even while locked)
+      if (navigator.onLine) {
+        try {
+          await pullFromCloud();
+          await refreshProfile();
+          setRefreshKey(k => k + 1);
+          triggerSync();
+        } catch (e) {
+          console.error('[app] initial pull failed:', e);
+        }
+      }
+    })();
 
     const onOnline = () => {
       setOnline(true);
-      pullFromCloud().then(() => doSync());
+      fullSync().then(() => {
+        refreshProfile();
+        setRefreshKey(k => k + 1);
+      });
     };
     const onOffline = () => setOnline(false);
     window.addEventListener('online', onOnline);
     window.addEventListener('offline', onOffline);
 
+    // Re-sync when tab becomes visible (user returns to app)
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible' && navigator.onLine) {
+        fullSync().then(() => {
+          refreshProfile();
+          setRefreshKey(k => k + 1);
+        });
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+
     return () => {
       window.removeEventListener('online', onOnline);
       window.removeEventListener('offline', onOffline);
+      document.removeEventListener('visibilitychange', onVisibility);
     };
   }, [refreshProfile]);
-
-  useEffect(() => {
-    if (navigator.onLine && !needsSetup) {
-      pullFromCloud().then(() => {
-        refreshProfile();
-        triggerSync();
-      });
-    }
-  }, []);
 
   return (
     <AppContext.Provider value={{
       profile, loading, locked, needsSetup, online, syncStatus,
-      activePage, refreshKey, setActivePage, setLocked, refreshProfile, refreshAll, completeSetup,
+      activePage, refreshKey, setActivePage, setLocked, unlockAndSync,
+      refreshProfile, refreshAll, completeSetup, forceSync,
     }}>
       {children}
     </AppContext.Provider>

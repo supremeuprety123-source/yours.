@@ -174,3 +174,20 @@ ALTER TABLE exams             DISABLE ROW LEVEL SECURITY;
 -- ============================================================
 -- DONE — Your YOURS database is ready.
 -- ============================================================
+
+-- 13. MOCK SCORES TABLE (CA Foundation plan)
+CREATE TABLE IF NOT EXISTS mock_scores (
+  id                  text PRIMARY KEY,
+  date                text,
+  paper               text,
+  score               numeric,
+  max_score           numeric,
+  confident_attempts  integer,
+  guessed_attempts    integer,
+  wrong_guesses       integer,
+  notes               text,
+  created_at          timestamptz,
+  updated_at          timestamptz
+);
+
+ALTER TABLE mock_scores DISABLE ROW LEVEL SECURITY;

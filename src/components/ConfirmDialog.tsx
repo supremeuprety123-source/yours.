@@ -14,23 +14,13 @@ export default function ConfirmDialog({ open, title, message, onConfirm, onCance
   return (
     <Modal open={open} onClose={onCancel} title={title} maxWidth="max-w-sm">
       <div className="flex flex-col items-center text-center gap-4">
-        <div className="rounded-full bg-[#C0392B]/10 p-3">
-          <AlertTriangle size={28} className="text-[#C0392B]" />
+        <div className="rounded-2xl border border-[#E07A5F]/25 bg-[#E07A5F]/10 p-3.5">
+          <AlertTriangle size={26} className="text-[#E07A5F]" strokeWidth={1.75} />
         </div>
-        <p className="text-zinc-300 text-sm">{message}</p>
-        <div className="flex gap-3 w-full mt-2">
-          <button
-            onClick={onCancel}
-            className="flex-1 rounded-xl border border-zinc-700 px-4 py-2.5 text-sm font-medium text-zinc-300 hover:bg-zinc-800 transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={onConfirm}
-            className="flex-1 rounded-xl bg-[#C0392B] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#a33224] transition-colors"
-          >
-            {confirmText}
-          </button>
+        <p className="text-sm text-[#A8A29A] leading-relaxed">{message}</p>
+        <div className="flex gap-3 w-full mt-1">
+          <button onClick={onCancel} className="y-btn y-btn-ghost flex-1">Cancel</button>
+          <button onClick={onConfirm} className="y-btn y-btn-danger flex-1">{confirmText}</button>
         </div>
       </div>
     </Modal>

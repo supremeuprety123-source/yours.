@@ -3,7 +3,7 @@ import supabase from './db-client.js';
 const TABLES = [
   'profile', 'papers', 'chapters', 'lessons', 'revision_history',
   'routines', 'focus_sessions', 'categories', 'transactions',
-  'diary_entries', 'life_notes', 'exams'
+  'diary_entries', 'life_notes', 'exams', 'mock_scores'
 ];
 
 export default async function handler(req, res) {

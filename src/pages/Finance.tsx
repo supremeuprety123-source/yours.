@@ -36,7 +36,7 @@ export default function Finance() {
   useEffect(() => { loadData(); }, [refreshKey]);
 
   if (loading) {
-    return <div className="flex items-center justify-center py-20"><div className="h-8 w-8 animate-spin rounded-full border-2 border-[#C8A96E] border-t-transparent" /></div>;
+    return <div className="flex items-center justify-center py-20"><div className="h-8 w-8 animate-spin rounded-full border-2 border-[#E8B86D] border-t-transparent" /></div>;
   }
 
   const sym = profile?.currency_symbol || 'रू';
@@ -67,7 +67,7 @@ export default function Finance() {
     expenseByCat[t.category] = (expenseByCat[t.category] || 0) + t.amount;
   });
   const donutData = Object.entries(expenseByCat).map(([name, value]) => ({ name, value }));
-  const COLORS = ['#C8A96E', '#E07B39', '#C0392B', '#4CAF7D', '#8B5CF6', '#3B82F6', '#EC4899', '#F59E0B'];
+  const COLORS = ['#E8B86D', '#E07A5F', '#E07A5F', '#8FBC8F', '#8B5CF6', '#3B82F6', '#EC4899', '#F59E0B'];
 
   // Budget bars
   const expenseCats = categories.filter(c => c.type === 'expense');
@@ -119,50 +119,50 @@ export default function Finance() {
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-zinc-100">Finance</h1>
-          <p className="text-sm text-zinc-500 mt-1">Balance: <span className={balance >= 0 ? 'text-[#4CAF7D] font-semibold' : 'text-[#C0392B] font-semibold'}>{formatCurrency(balance, sym)}</span></p>
+          <h1 className="y-page-title">Finance</h1>
+          <p className="text-sm text-[#F7F1E7]0 mt-1">Balance: <span className={balance >= 0 ? 'text-[#8FBC8F] font-semibold' : 'text-[#E07A5F] font-semibold'}>{formatCurrency(balance, sym)}</span></p>
         </div>
         <div className="flex gap-2">
-          <button onClick={() => { setEditingCat(null); setCatModal(true); }} className="rounded-xl border border-zinc-700 px-3 py-2.5 text-sm font-medium text-zinc-300 hover:bg-zinc-800">Categories</button>
-          <button onClick={() => { setEditingTx(null); setTxModal(true); }} className="flex items-center gap-2 rounded-xl bg-[#C8A96E] px-4 py-2.5 text-sm font-semibold text-black hover:bg-[#d4b87f]"><Plus size={18} /> Add Transaction</button>
+          <button onClick={() => { setEditingCat(null); setCatModal(true); }} className="rounded-xl border border-[rgba(255,236,200,0.1)] px-3 py-2.5 text-sm font-medium text-[#D6CFC4] hover:bg-[#2A261F]">Categories</button>
+          <button onClick={() => { setEditingTx(null); setTxModal(true); }} className="y-btn y-btn-primary flex items-center gap-2"><Plus size={18} /> Add Transaction</button>
         </div>
       </div>
 
       {/* View Tabs */}
-      <div className="flex gap-1 rounded-xl border border-zinc-800 bg-[#1A1A1A] p-1 w-fit">
+      <div className="flex gap-1 rounded-xl border border-[rgba(255,236,200,0.07)] bg-[#1E1B16]/90 p-1 w-fit">
         {(['dashboard','transactions','reports'] as FinView[]).map(v => (
-          <button key={v} onClick={() => setView(v)} className={`rounded-lg px-4 py-1.5 text-sm font-medium capitalize transition-colors ${view === v ? 'bg-[#C8A96E] text-black' : 'text-zinc-400 hover:text-zinc-200'}`}>{v}</button>
+          <button key={v} onClick={() => setView(v)} className={`rounded-lg px-4 py-1.5 text-sm font-medium capitalize transition-colors ${view === v ? 'bg-[#E8B86D] text-black' : 'text-[#A8A29A] hover:text-[#EDE6DA]'}`}>{v}</button>
         ))}
       </div>
 
       {/* Period filter */}
       <div className="flex gap-2 flex-wrap">
         {(['all','month','3months','year'] as const).map(p => (
-          <button key={p} onClick={() => setPeriod(p)} className={`rounded-lg px-3 py-1 text-xs font-medium ${period === p ? 'bg-[#C8A96E]/10 text-[#C8A96E]' : 'text-zinc-500 hover:text-zinc-300'}`}>{p === '3months' ? '3M' : p === 'all' ? 'All Time' : p === 'month' ? 'This Month' : 'This Year'}</button>
+          <button key={p} onClick={() => setPeriod(p)} className={`rounded-lg px-3 py-1 text-xs font-medium ${period === p ? 'bg-[#E8B86D]/10 text-[#E8B86D]' : 'text-[#F7F1E7]0 hover:text-[#D6CFC4]'}`}>{p === '3months' ? '3M' : p === 'all' ? 'All Time' : p === 'month' ? 'This Month' : 'This Year'}</button>
         ))}
       </div>
 
       {view === 'dashboard' && (
         <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="rounded-2xl border border-zinc-800 bg-[#1A1A1A] p-5">
-              <div className="flex items-center gap-2 text-zinc-400 mb-2"><Wallet size={16} /><span className="text-xs">Balance</span></div>
-              <div className={`text-3xl font-bold ${balance >= 0 ? 'text-zinc-100' : 'text-[#C0392B]'}`}>{formatCurrency(balance, sym)}</div>
+            <div className="y-panel p-5">
+              <div className="flex items-center gap-2 text-[#A8A29A] mb-2"><Wallet size={16} /><span className="text-xs">Balance</span></div>
+              <div className={`text-3xl font-bold ${balance >= 0 ? 'text-[#F5F0E8]' : 'text-[#E07A5F]'}`}>{formatCurrency(balance, sym)}</div>
             </div>
-            <div className="rounded-2xl border border-zinc-800 bg-[#1A1A1A] p-5">
-              <div className="flex items-center gap-2 text-[#4CAF7D] mb-2"><TrendingUp size={16} /><span className="text-xs">Income</span></div>
-              <div className="text-3xl font-bold text-[#4CAF7D]">{formatCurrency(income, sym)}</div>
+            <div className="y-panel p-5">
+              <div className="flex items-center gap-2 text-[#8FBC8F] mb-2"><TrendingUp size={16} /><span className="text-xs">Income</span></div>
+              <div className="text-3xl font-bold text-[#8FBC8F]">{formatCurrency(income, sym)}</div>
             </div>
-            <div className="rounded-2xl border border-zinc-800 bg-[#1A1A1A] p-5">
-              <div className="flex items-center gap-2 text-[#C0392B] mb-2"><TrendingDown size={16} /><span className="text-xs">Expense</span></div>
-              <div className="text-3xl font-bold text-[#C0392B]">{formatCurrency(expense, sym)}</div>
+            <div className="y-panel p-5">
+              <div className="flex items-center gap-2 text-[#E07A5F] mb-2"><TrendingDown size={16} /><span className="text-xs">Expense</span></div>
+              <div className="text-3xl font-bold text-[#E07A5F]">{formatCurrency(expense, sym)}</div>
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Expense Donut */}
-            <div className="rounded-2xl border border-zinc-800 bg-[#1A1A1A] p-5">
-              <h3 className="text-sm font-semibold text-zinc-300 mb-3">Expense Breakdown</h3>
+            <div className="y-panel p-5">
+              <h3 className="text-sm font-semibold text-[#D6CFC4] mb-3">Expense Breakdown</h3>
               {donutData.length === 0 ? (
                 <EmptyState icon={<PieIcon size={32} />} message="No expenses recorded yet." />
               ) : (
@@ -179,8 +179,8 @@ export default function Finance() {
                     {donutData.slice(0, 5).map((d, i) => (
                       <div key={d.name} className="flex items-center gap-2 text-xs">
                         <div className="h-2.5 w-2.5 rounded-full" style={{ background: COLORS[i % COLORS.length] }} />
-                        <span className="text-zinc-400 flex-1 truncate">{d.name}</span>
-                        <span className="text-zinc-300">{formatCurrency(d.value, sym)}</span>
+                        <span className="text-[#A8A29A] flex-1 truncate">{d.name}</span>
+                        <span className="text-[#D6CFC4]">{formatCurrency(d.value, sym)}</span>
                       </div>
                     ))}
                   </div>
@@ -189,8 +189,8 @@ export default function Finance() {
             </div>
 
             {/* Budget Bars */}
-            <div className="rounded-2xl border border-zinc-800 bg-[#1A1A1A] p-5">
-              <h3 className="text-sm font-semibold text-zinc-300 mb-3">Budget Tracking</h3>
+            <div className="y-panel p-5">
+              <h3 className="text-sm font-semibold text-[#D6CFC4] mb-3">Budget Tracking</h3>
               {budgetBars.length === 0 ? (
                 <EmptyState message="Set up expense categories with budgets to track spending." />
               ) : (
@@ -198,11 +198,11 @@ export default function Finance() {
                   {budgetBars.map(b => (
                     <div key={b.name}>
                       <div className="flex items-center justify-between text-xs mb-1">
-                        <span className="text-zinc-400">{b.name}</span>
-                        <span className={b.pct >= 100 ? 'text-[#C0392B]' : b.pct >= 75 ? 'text-[#E07B39]' : 'text-zinc-500'}>{formatCurrency(b.spent, sym)} / {formatCurrency(b.budget, sym)}</span>
+                        <span className="text-[#A8A29A]">{b.name}</span>
+                        <span className={b.pct >= 100 ? 'text-[#E07A5F]' : b.pct >= 75 ? 'text-[#E07A5F]' : 'text-[#F7F1E7]0'}>{formatCurrency(b.spent, sym)} / {formatCurrency(b.budget, sym)}</span>
                       </div>
-                      <div className="h-2 rounded-full bg-zinc-800 overflow-hidden">
-                        <div className={`h-full rounded-full transition-all ${b.pct >= 100 ? 'bg-[#C0392B]' : b.pct >= 75 ? 'bg-[#E07B39]' : 'bg-[#4CAF7D]'}`} style={{ width: `${Math.min(b.pct, 100)}%` }} />
+                      <div className="h-2 rounded-full bg-[#2A261F] overflow-hidden">
+                        <div className={`h-full rounded-full transition-all ${b.pct >= 100 ? 'bg-[#E07A5F]' : b.pct >= 75 ? 'bg-[#E07A5F]' : 'bg-[#8FBC8F]'}`} style={{ width: `${Math.min(b.pct, 100)}%` }} />
                       </div>
                     </div>
                   ))}
@@ -217,12 +217,12 @@ export default function Finance() {
         <div className="space-y-4">
           <div className="flex gap-2 flex-wrap">
             <div className="relative flex-1 min-w-[200px]">
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
-              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search transactions..." className="w-full rounded-xl border border-zinc-700 bg-[#1A1A1A] pl-9 pr-4 py-2.5 text-sm text-zinc-200 outline-none focus:border-[#C8A96E]" />
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#F7F1E7]0" />
+              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search transactions..." className="w-full rounded-xl border border-[rgba(255,236,200,0.1)] bg-[#1E1B16]/90 pl-9 pr-4 py-2.5 text-sm text-[#EDE6DA] outline-none focus:border-[#E8B86D]" />
             </div>
             <div className="flex gap-1">
               {(['all','income','expense'] as const).map(f => (
-                <button key={f} onClick={() => setFilterType(f)} className={`rounded-lg px-3 py-2 text-xs font-medium capitalize ${filterType === f ? 'bg-[#C8A96E]/10 text-[#C8A96E]' : 'text-zinc-500'}`}>{f}</button>
+                <button key={f} onClick={() => setFilterType(f)} className={`rounded-lg px-3 py-2 text-xs font-medium capitalize ${filterType === f ? 'bg-[#E8B86D]/10 text-[#E8B86D]' : 'text-[#F7F1E7]0'}`}>{f}</button>
               ))}
             </div>
           </div>
@@ -233,20 +233,20 @@ export default function Finance() {
             <div className="space-y-4">
               {sortedDates.map(date => (
                 <div key={date}>
-                  <div className="text-xs font-medium text-zinc-500 mb-2 sticky top-0 bg-[#0D0D0D] py-1">{formatDate(date)}</div>
+                  <div className="text-xs font-medium text-[#F7F1E7]0 mb-2 sticky top-0 bg-[#0F0E0C] py-1">{formatDate(date)}</div>
                   <div className="space-y-1.5">
                     {grouped[date].map(t => (
-                      <div key={t.id} className="flex items-center gap-3 rounded-xl border border-zinc-800 bg-[#1A1A1A] px-4 py-3">
-                        <div className={`flex h-9 w-9 items-center justify-center rounded-full ${t.type === 'income' ? 'bg-[#4CAF7D]/10' : 'bg-[#C0392B]/10'}`}>
-                          {t.type === 'income' ? <TrendingUp size={16} className="text-[#4CAF7D]" /> : <TrendingDown size={16} className="text-[#C0392B]" />}
+                      <div key={t.id} className="flex items-center gap-3 rounded-xl border border-[rgba(255,236,200,0.07)] bg-[#1E1B16]/90 px-4 py-3">
+                        <div className={`flex h-9 w-9 items-center justify-center rounded-full ${t.type === 'income' ? 'bg-[#8FBC8F]/10' : 'bg-[#E07A5F]/10'}`}>
+                          {t.type === 'income' ? <TrendingUp size={16} className="text-[#8FBC8F]" /> : <TrendingDown size={16} className="text-[#E07A5F]" />}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="text-sm font-medium text-zinc-200 truncate">{t.description || t.category}</div>
-                          <div className="text-xs text-zinc-500">{t.category}{t.from_to && ` · ${t.from_to}`}{t.payment_method && ` · ${t.payment_method}`}</div>
+                          <div className="text-sm font-medium text-[#EDE6DA] truncate">{t.description || t.category}</div>
+                          <div className="text-xs text-[#F7F1E7]0">{t.category}{t.from_to && ` · ${t.from_to}`}{t.payment_method && ` · ${t.payment_method}`}</div>
                         </div>
-                        <div className={`text-sm font-semibold ${t.type === 'income' ? 'text-[#4CAF7D]' : 'text-[#C0392B]'}`}>{t.type === 'income' ? '+' : '-'}{formatCurrency(t.amount, sym)}</div>
-                        <button onClick={() => { setEditingTx(t); setTxModal(true); }} className="text-zinc-500 hover:text-zinc-300"><Edit2 size={14} /></button>
-                        <button onClick={() => setDeleteTarget({ type: 'tx', id: t.id, name: t.description || t.category })} className="text-zinc-500 hover:text-[#C0392B]"><Trash2 size={14} /></button>
+                        <div className={`text-sm font-semibold ${t.type === 'income' ? 'text-[#8FBC8F]' : 'text-[#E07A5F]'}`}>{t.type === 'income' ? '+' : '-'}{formatCurrency(t.amount, sym)}</div>
+                        <button onClick={() => { setEditingTx(t); setTxModal(true); }} className="text-[#F7F1E7]0 hover:text-[#D6CFC4]"><Edit2 size={14} /></button>
+                        <button onClick={() => setDeleteTarget({ type: 'tx', id: t.id, name: t.description || t.category })} className="text-[#F7F1E7]0 hover:text-[#E07A5F]"><Trash2 size={14} /></button>
                       </div>
                     ))}
                   </div>
@@ -264,34 +264,34 @@ export default function Finance() {
           ) : (
             <>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <ReportCard label="Savings Rate" value={`${savingsRate}%`} color={savingsRate >= 20 ? '#4CAF7D' : '#E07B39'} />
-                <ReportCard label="Top Category" value={topCat ? topCat[0] : '—'} sub={topCat ? formatCurrency(topCat[1], sym) : ''} color="#C8A96E" />
-                <ReportCard label="Top Source" value={topSourceEntry ? topSourceEntry[0] : '—'} sub={topSourceEntry ? formatCurrency(topSourceEntry[1], sym) : ''} color="#4CAF7D" />
-                <ReportCard label="Daily Average" value={formatCurrency(dailyAvg, sym)} color="#E07B39" />
+                <ReportCard label="Savings Rate" value={`${savingsRate}%`} color={savingsRate >= 20 ? '#8FBC8F' : '#E07A5F'} />
+                <ReportCard label="Top Category" value={topCat ? topCat[0] : '—'} sub={topCat ? formatCurrency(topCat[1], sym) : ''} color="#E8B86D" />
+                <ReportCard label="Top Source" value={topSourceEntry ? topSourceEntry[0] : '—'} sub={topSourceEntry ? formatCurrency(topSourceEntry[1], sym) : ''} color="#8FBC8F" />
+                <ReportCard label="Daily Average" value={formatCurrency(dailyAvg, sym)} color="#E07A5F" />
               </div>
 
-              <div className="rounded-2xl border border-zinc-800 bg-[#1A1A1A] p-5">
-                <h3 className="text-sm font-semibold text-zinc-300 mb-4">Income vs Expense (6 months)</h3>
+              <div className="y-panel p-5">
+                <h3 className="text-sm font-semibold text-[#D6CFC4] mb-4">Income vs Expense (6 months)</h3>
                 <ResponsiveContainer width="100%" height={250}>
                   <BarChart data={trendData}>
                     <XAxis dataKey="month" tick={{ fill: '#52525b', fontSize: 11 }} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fill: '#52525b', fontSize: 10 }} axisLine={false} tickLine={false} />
                     <Tooltip contentStyle={{ background: '#1A1A1A', border: '1px solid #27272a', borderRadius: 8, fontSize: 12 }} />
                     <Legend wrapperStyle={{ fontSize: 11 }} />
-                    <Bar dataKey="income" fill="#4CAF7D" radius={[4,4,0,0]} />
-                    <Bar dataKey="expense" fill="#C0392B" radius={[4,4,0,0]} />
+                    <Bar dataKey="income" fill="#8FBC8F" radius={[4,4,0,0]} />
+                    <Bar dataKey="expense" fill="#E07A5F" radius={[4,4,0,0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
 
-              <div className="rounded-2xl border border-zinc-800 bg-[#1A1A1A] p-5">
-                <h3 className="text-sm font-semibold text-zinc-300 mb-4">Savings Trend</h3>
+              <div className="y-panel p-5">
+                <h3 className="text-sm font-semibold text-[#D6CFC4] mb-4">Savings Trend</h3>
                 <ResponsiveContainer width="100%" height={150}>
                   <LineChart data={trendData.map(d => ({ month: d.month, savings: d.income - d.expense }))}>
                     <XAxis dataKey="month" tick={{ fill: '#52525b', fontSize: 11 }} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fill: '#52525b', fontSize: 10 }} axisLine={false} tickLine={false} />
                     <Tooltip contentStyle={{ background: '#1A1A1A', border: '1px solid #27272a', borderRadius: 8, fontSize: 12 }} />
-                    <Line type="monotone" dataKey="savings" stroke="#C8A96E" strokeWidth={2} dot={{ fill: '#C8A96E', r: 3 }} />
+                    <Line type="monotone" dataKey="savings" stroke="#E8B86D" strokeWidth={2} dot={{ fill: '#E8B86D', r: 3 }} />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
@@ -317,10 +317,10 @@ export default function Finance() {
 
 function ReportCard({ label, value, sub, color }: { label: string; value: string; color: string; sub?: string }) {
   return (
-    <div className="rounded-xl border border-zinc-800 bg-[#1A1A1A] p-4">
-      <div className="text-xs text-zinc-500 mb-1">{label}</div>
+    <div className="rounded-xl border border-[rgba(255,236,200,0.07)] bg-[#1E1B16]/90 p-4">
+      <div className="text-xs text-[#F7F1E7]0 mb-1">{label}</div>
       <div className="text-lg font-bold truncate" style={{ color }}>{value}</div>
-      {sub && <div className="text-xs text-zinc-500 mt-0.5">{sub}</div>}
+      {sub && <div className="text-xs text-[#F7F1E7]0 mt-0.5">{sub}</div>}
     </div>
   );
 }
@@ -365,49 +365,49 @@ function TxModal({ open, editing, categories, sym, onClose, onSaved }: any) {
     <Modal open={open} onClose={onClose} title={editing ? 'Edit Transaction' : 'Add Transaction'}>
       <div className="space-y-4">
         <div className="grid grid-cols-2 gap-2">
-          <button onClick={() => { setType('income'); setCategory(''); }} className={`rounded-xl border py-2.5 text-sm font-medium ${type === 'income' ? 'border-[#4CAF7D] bg-[#4CAF7D]/10 text-[#4CAF7D]' : 'border-zinc-700 text-zinc-400'}`}>Income</button>
-          <button onClick={() => { setType('expense'); setCategory(''); }} className={`rounded-xl border py-2.5 text-sm font-medium ${type === 'expense' ? 'border-[#C0392B] bg-[#C0392B]/10 text-[#C0392B]' : 'border-zinc-700 text-zinc-400'}`}>Expense</button>
+          <button onClick={() => { setType('income'); setCategory(''); }} className={`rounded-xl border py-2.5 text-sm font-medium ${type === 'income' ? 'border-[#8FBC8F] bg-[#8FBC8F]/10 text-[#8FBC8F]' : 'border-[rgba(255,236,200,0.1)] text-[#A8A29A]'}`}>Income</button>
+          <button onClick={() => { setType('expense'); setCategory(''); }} className={`rounded-xl border py-2.5 text-sm font-medium ${type === 'expense' ? 'border-[#E07A5F] bg-[#E07A5F]/10 text-[#E07A5F]' : 'border-[rgba(255,236,200,0.1)] text-[#A8A29A]'}`}>Expense</button>
         </div>
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-zinc-300">Amount ({sym})</label>
-          <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0" className="w-full rounded-xl border border-zinc-700 bg-[#0D0D0D] px-4 py-2.5 text-zinc-100 outline-none focus:border-[#C8A96E]" />
+          <label className="mb-1.5 block text-sm font-medium text-[#D6CFC4]">Amount ({sym})</label>
+          <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0" className="w-full rounded-xl border border-[rgba(255,236,200,0.1)] bg-[#0F0E0C] px-4 py-2.5 text-[#F5F0E8] outline-none focus:border-[#E8B86D]" />
         </div>
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-zinc-300">Category</label>
+          <label className="mb-1.5 block text-sm font-medium text-[#D6CFC4]">Category</label>
           {relevantCats.length > 0 ? (
-            <select value={category} onChange={e => setCategory(e.target.value)} className="w-full rounded-xl border border-zinc-700 bg-[#0D0D0D] px-4 py-2.5 text-zinc-200 outline-none focus:border-[#C8A96E]">
+            <select value={category} onChange={e => setCategory(e.target.value)} className="w-full rounded-xl border border-[rgba(255,236,200,0.1)] bg-[#0F0E0C] px-4 py-2.5 text-[#EDE6DA] outline-none focus:border-[#E8B86D]">
               <option value="">Select category</option>
               {relevantCats.map((c: Category) => <option key={c.id} value={c.name}>{c.name}</option>)}
             </select>
           ) : (
-            <input value={category} onChange={e => setCategory(e.target.value)} placeholder="Type a category name" className="w-full rounded-xl border border-zinc-700 bg-[#0D0D0D] px-4 py-2.5 text-zinc-100 outline-none focus:border-[#C8A96E]" />
+            <input value={category} onChange={e => setCategory(e.target.value)} placeholder="Type a category name" className="w-full rounded-xl border border-[rgba(255,236,200,0.1)] bg-[#0F0E0C] px-4 py-2.5 text-[#F5F0E8] outline-none focus:border-[#E8B86D]" />
           )}
         </div>
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-zinc-300">Description</label>
-          <input value={description} onChange={e => setDescription(e.target.value)} placeholder="What was this for?" className="w-full rounded-xl border border-zinc-700 bg-[#0D0D0D] px-4 py-2.5 text-zinc-100 outline-none focus:border-[#C8A96E]" />
+          <label className="mb-1.5 block text-sm font-medium text-[#D6CFC4]">Description</label>
+          <input value={description} onChange={e => setDescription(e.target.value)} placeholder="What was this for?" className="w-full rounded-xl border border-[rgba(255,236,200,0.1)] bg-[#0F0E0C] px-4 py-2.5 text-[#F5F0E8] outline-none focus:border-[#E8B86D]" />
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-zinc-300">Date</label>
-            <input type="date" value={date} onChange={e => setDate(e.target.value)} className="w-full rounded-xl border border-zinc-700 bg-[#0D0D0D] px-4 py-2.5 text-zinc-100 outline-none focus:border-[#C8A96E]" />
+            <label className="mb-1.5 block text-sm font-medium text-[#D6CFC4]">Date</label>
+            <input type="date" value={date} onChange={e => setDate(e.target.value)} className="w-full rounded-xl border border-[rgba(255,236,200,0.1)] bg-[#0F0E0C] px-4 py-2.5 text-[#F5F0E8] outline-none focus:border-[#E8B86D]" />
           </div>
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-zinc-300">{type === 'income' ? 'From' : 'To'}</label>
-            <input value={fromTo} onChange={e => setFromTo(e.target.value)} placeholder={type === 'income' ? 'Source' : 'Recipient'} className="w-full rounded-xl border border-zinc-700 bg-[#0D0D0D] px-4 py-2.5 text-zinc-100 outline-none focus:border-[#C8A96E]" />
+            <label className="mb-1.5 block text-sm font-medium text-[#D6CFC4]">{type === 'income' ? 'From' : 'To'}</label>
+            <input value={fromTo} onChange={e => setFromTo(e.target.value)} placeholder={type === 'income' ? 'Source' : 'Recipient'} className="w-full rounded-xl border border-[rgba(255,236,200,0.1)] bg-[#0F0E0C] px-4 py-2.5 text-[#F5F0E8] outline-none focus:border-[#E8B86D]" />
           </div>
         </div>
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-zinc-300">Payment Method</label>
-          <select value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)} className="w-full rounded-xl border border-zinc-700 bg-[#0D0D0D] px-4 py-2.5 text-zinc-200 outline-none focus:border-[#C8A96E]">
+          <label className="mb-1.5 block text-sm font-medium text-[#D6CFC4]">Payment Method</label>
+          <select value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)} className="w-full rounded-xl border border-[rgba(255,236,200,0.1)] bg-[#0F0E0C] px-4 py-2.5 text-[#EDE6DA] outline-none focus:border-[#E8B86D]">
             {['Cash','Bank Transfer','Card','Esewa','Khalti','Mobile Banking','Other'].map(m => <option key={m}>{m}</option>)}
           </select>
         </div>
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-zinc-300">Notes (optional)</label>
-          <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} className="w-full rounded-xl border border-zinc-700 bg-[#0D0D0D] px-4 py-2.5 text-zinc-100 outline-none focus:border-[#C8A96E] resize-none" />
+          <label className="mb-1.5 block text-sm font-medium text-[#D6CFC4]">Notes (optional)</label>
+          <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} className="w-full rounded-xl border border-[rgba(255,236,200,0.1)] bg-[#0F0E0C] px-4 py-2.5 text-[#F5F0E8] outline-none focus:border-[#E8B86D] resize-none" />
         </div>
-        <button onClick={save} disabled={!amount || +amount <= 0} className="w-full rounded-xl bg-[#C8A96E] px-4 py-2.5 text-sm font-semibold text-black hover:bg-[#d4b87f] disabled:opacity-40">{editing ? 'Save Changes' : 'Add Transaction'}</button>
+        <button onClick={save} disabled={!amount || +amount <= 0} className="y-btn y-btn-primary w-full disabled:opacity-40">{editing ? 'Save Changes' : 'Add Transaction'}</button>
       </div>
     </Modal>
   );
@@ -433,30 +433,30 @@ function CatModal({ open, editing, categories, onClose, onSaved, onDelete }: any
     <Modal open={open} onClose={onClose} title="Categories">
       <div className="space-y-4">
         <div className="grid grid-cols-2 gap-2">
-          <button onClick={() => setType('expense')} className={`rounded-xl border py-2 text-sm font-medium ${type === 'expense' ? 'border-[#C0392B] bg-[#C0392B]/10 text-[#C0392B]' : 'border-zinc-700 text-zinc-400'}`}>Expense</button>
-          <button onClick={() => setType('income')} className={`rounded-xl border py-2 text-sm font-medium ${type === 'income' ? 'border-[#4CAF7D] bg-[#4CAF7D]/10 text-[#4CAF7D]' : 'border-zinc-700 text-zinc-400'}`}>Income</button>
+          <button onClick={() => setType('expense')} className={`rounded-xl border py-2 text-sm font-medium ${type === 'expense' ? 'border-[#E07A5F] bg-[#E07A5F]/10 text-[#E07A5F]' : 'border-[rgba(255,236,200,0.1)] text-[#A8A29A]'}`}>Expense</button>
+          <button onClick={() => setType('income')} className={`rounded-xl border py-2 text-sm font-medium ${type === 'income' ? 'border-[#8FBC8F] bg-[#8FBC8F]/10 text-[#8FBC8F]' : 'border-[rgba(255,236,200,0.1)] text-[#A8A29A]'}`}>Income</button>
         </div>
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-zinc-300">Category Name</label>
-          <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Food & Dining" className="w-full rounded-xl border border-zinc-700 bg-[#0D0D0D] px-4 py-2.5 text-zinc-100 outline-none focus:border-[#C8A96E]" />
+          <label className="mb-1.5 block text-sm font-medium text-[#D6CFC4]">Category Name</label>
+          <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Food & Dining" className="w-full rounded-xl border border-[rgba(255,236,200,0.1)] bg-[#0F0E0C] px-4 py-2.5 text-[#F5F0E8] outline-none focus:border-[#E8B86D]" />
         </div>
         {type === 'expense' && (
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-zinc-300">Monthly Budget</label>
-            <input type="number" value={budget} onChange={e => setBudget(e.target.value)} placeholder="0" className="w-full rounded-xl border border-zinc-700 bg-[#0D0D0D] px-4 py-2.5 text-zinc-100 outline-none focus:border-[#C8A96E]" />
+            <label className="mb-1.5 block text-sm font-medium text-[#D6CFC4]">Monthly Budget</label>
+            <input type="number" value={budget} onChange={e => setBudget(e.target.value)} placeholder="0" className="w-full rounded-xl border border-[rgba(255,236,200,0.1)] bg-[#0F0E0C] px-4 py-2.5 text-[#F5F0E8] outline-none focus:border-[#E8B86D]" />
           </div>
         )}
-        <button onClick={save} disabled={!name.trim()} className="w-full rounded-xl bg-[#C8A96E] px-4 py-2.5 text-sm font-semibold text-black hover:bg-[#d4b87f] disabled:opacity-40">{editing ? 'Save Changes' : 'Add Category'}</button>
+        <button onClick={save} disabled={!name.trim()} className="y-btn y-btn-primary w-full disabled:opacity-40">{editing ? 'Save Changes' : 'Add Category'}</button>
 
-        <div className="border-t border-zinc-800 pt-4">
-          <div className="text-xs font-medium text-zinc-500 mb-2">Existing Categories</div>
+        <div className="border-t border-[rgba(255,236,200,0.07)] pt-4">
+          <div className="text-xs font-medium text-[#F7F1E7]0 mb-2">Existing Categories</div>
           <div className="space-y-1.5 max-h-40 overflow-y-auto">
-            {categories.length === 0 ? <p className="text-xs text-zinc-600">No categories yet.</p> : categories.map((c: Category) => (
-              <div key={c.id} className="flex items-center gap-2 rounded-lg bg-zinc-900/50 px-3 py-2">
-                <span className={`h-2 w-2 rounded-full ${c.type === 'income' ? 'bg-[#4CAF7D]' : 'bg-[#C0392B]'}`} />
-                <span className="text-sm text-zinc-300 flex-1">{c.name}</span>
-                {c.budget > 0 && <span className="text-xs text-zinc-500">{c.budget}</span>}
-                <button onClick={() => onDelete(c)} className="text-zinc-500 hover:text-[#C0392B]"><Trash2 size={13} /></button>
+            {categories.length === 0 ? <p className="text-xs text-[#6B6560]">No categories yet.</p> : categories.map((c: Category) => (
+              <div key={c.id} className="flex items-center gap-2 rounded-lg bg-black/25 px-3 py-2">
+                <span className={`h-2 w-2 rounded-full ${c.type === 'income' ? 'bg-[#8FBC8F]' : 'bg-[#E07A5F]'}`} />
+                <span className="text-sm text-[#D6CFC4] flex-1">{c.name}</span>
+                {c.budget > 0 && <span className="text-xs text-[#F7F1E7]0">{c.budget}</span>}
+                <button onClick={() => onDelete(c)} className="text-[#F7F1E7]0 hover:text-[#E07A5F]"><Trash2 size={13} /></button>
               </div>
             ))}
           </div>
