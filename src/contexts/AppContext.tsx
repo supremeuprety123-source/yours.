@@ -5,6 +5,39 @@ import type { Profile } from '../lib/types';
 
 export type PageName = 'home' | 'study' | 'planner' | 'finance' | 'diary' | 'settings';
 
+const DEVICE_TRUST_KEY = 'yours_device_trusted_profile';
+
+function isDeviceTrusted(profileId: string): boolean {
+  try {
+    return localStorage.getItem(DEVICE_TRUST_KEY) === profileId;
+  } catch {
+    return false;
+  }
+}
+
+function markDeviceTrusted(profileId: string) {
+  try {
+    localStorage.setItem(DEVICE_TRUST_KEY, profileId);
+  } catch {
+    /* ignore */
+  }
+}
+
+/** New device (or cleared storage) must enter PIN if one is stored — even when pin_enabled is off */
+function shouldLockOnBoot(profile: Profile, isFirstPaint: boolean): boolean {
+  if (!isFirstPaint) return false; // never re-lock mid-session via refreshProfile
+  const hasPin = typeof profile.pin === 'string' && profile.pin.length === 4;
+  if (!hasPin) return false;
+
+  // Known device: respect settings toggle
+  if (isDeviceTrusted(profile.id)) {
+    return !!profile.pin_enabled;
+  }
+
+  // New / untrusted device: always require PIN when one exists
+  return true;
+}
+
 interface AppContextType {
   profile: Profile | null;
   loading: boolean;
@@ -35,21 +68,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [activePage, setActivePage] = useState<PageName>('home');
   const [refreshKey, setRefreshKey] = useState(0);
   const hasInitialized = useRef(false);
+  const bootLockApplied = useRef(false);
 
-  const refreshProfile = useCallback(async () => {
-    const profiles = await db.profile.toArray();
+  const applyProfileState = useCallback((profiles: Profile[], opts?: { fromBoot?: boolean }) => {
     if (profiles.length > 0) {
-      setProfile(profiles[0]);
+      const sorted = [...profiles].sort((a, b) =>
+        String(b.updated_at || '').localeCompare(String(a.updated_at || ''))
+      );
+      const p = sorted[0];
+      setProfile(p);
       setNeedsSetup(false);
-      // Only set locked on the very first load — never re-lock after unlock
-      if (!hasInitialized.current) {
-        setLocked(profiles[0].pin_enabled);
+
+      // Lock decision only on first successful profile load this session
+      if (!bootLockApplied.current) {
+        setLocked(shouldLockOnBoot(p, true));
+        bootLockApplied.current = true;
       }
     } else {
+      setProfile(null);
       setNeedsSetup(true);
       setLocked(false);
     }
   }, []);
+
+  const refreshProfile = useCallback(async () => {
+    const profiles = await db.profile.toArray();
+    applyProfileState(profiles);
+  }, [applyProfileState]);
 
   const refreshAll = useCallback(() => {
     setRefreshKey(k => k + 1);
@@ -59,12 +104,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const completeSetup = useCallback((p: Profile) => {
     setProfile(p);
     setNeedsSetup(false);
-    setLocked(p.pin_enabled);
+    // First-time setup on this device — trust after setup; lock only if they enabled PIN
+    markDeviceTrusted(p.id);
+    bootLockApplied.current = true;
+    setLocked(!!p.pin_enabled && typeof p.pin === 'string' && p.pin.length === 4);
   }, []);
 
-  /** Called after successful PIN unlock — pull cloud data then refresh UI */
+  /** Successful PIN unlock — trust this device, unlock, then sync */
   const unlockAndSync = useCallback(async () => {
     setLocked(false);
+    const profiles = await db.profile.toArray();
+    if (profiles[0]?.id) {
+      markDeviceTrusted(profiles[0].id);
+    }
     if (navigator.onLine) {
       try {
         await fullSync();
@@ -87,28 +139,52 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setSyncCallback(setSyncStatus);
 
     (async () => {
-      // Load local profile first so lock screen can show quickly
-      await refreshProfile();
-      hasInitialized.current = true;
-      setLoading(false);
+      try {
+        // 1) Local profile first
+        let profiles = await db.profile.toArray();
 
-      // Then pull from cloud in background (even while locked)
-      if (navigator.onLine) {
-        try {
-          await pullFromCloud();
-          await refreshProfile();
-          setRefreshKey(k => k + 1);
-          triggerSync();
-        } catch (e) {
-          console.error('[app] initial pull failed:', e);
+        // 2) New device: empty local DB → pull cloud BEFORE deciding setup
+        if (profiles.length === 0 && navigator.onLine) {
+          onSyncStatusChangeSafe('syncing');
+          try {
+            await pullFromCloud();
+            profiles = await db.profile.toArray();
+          } catch (e) {
+            console.error('[app] restore-from-cloud failed:', e);
+          }
         }
+
+        // 3) Apply profile / setup / lock
+        applyProfileState(profiles, { fromBoot: true });
+        hasInitialized.current = true;
+        setLoading(false);
+
+        // 4) Background full sync if we already had local data
+        if (navigator.onLine && profiles.length > 0) {
+          try {
+            await pullFromCloud();
+            const again = await db.profile.toArray();
+            applyProfileState(again);
+            setRefreshKey(k => k + 1);
+            triggerSync();
+          } catch (e) {
+            console.error('[app] background pull failed:', e);
+          }
+        }
+      } catch (e) {
+        console.error('[app] boot failed:', e);
+        hasInitialized.current = true;
+        setLoading(false);
+        setNeedsSetup(true);
+        setLocked(false);
       }
     })();
 
     const onOnline = () => {
       setOnline(true);
-      fullSync().then(() => {
-        refreshProfile();
+      fullSync().then(async () => {
+        const profiles = await db.profile.toArray();
+        applyProfileState(profiles);
         setRefreshKey(k => k + 1);
       });
     };
@@ -116,11 +192,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     window.addEventListener('online', onOnline);
     window.addEventListener('offline', onOffline);
 
-    // Re-sync when tab becomes visible (user returns to app)
     const onVisibility = () => {
       if (document.visibilityState === 'visible' && navigator.onLine) {
-        fullSync().then(() => {
-          refreshProfile();
+        fullSync().then(async () => {
+          const profiles = await db.profile.toArray();
+          applyProfileState(profiles);
           setRefreshKey(k => k + 1);
         });
       }
@@ -132,7 +208,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('offline', onOffline);
       document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, [refreshProfile]);
+  }, [applyProfileState]);
 
   return (
     <AppContext.Provider value={{
@@ -143,6 +219,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       {children}
     </AppContext.Provider>
   );
+}
+
+function onSyncStatusChangeSafe(_s: string) {
+  /* status is set via setSyncCallback once provider mounts */
 }
 
 export function useApp() {

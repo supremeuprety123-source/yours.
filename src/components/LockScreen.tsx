@@ -42,6 +42,9 @@ export default function LockScreen() {
         <p className="mt-2.5 text-sm text-[#8A8478]">
           {profile?.name ? `Welcome back, ${profile.name}` : 'Welcome back'}
         </p>
+        <p className="mt-1 text-[11px] text-[#5C574F] max-w-[16rem] text-center">
+          Enter your PIN to open this device
+        </p>
       </div>
 
       {unlocking ? (

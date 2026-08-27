@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { getAll } from '../lib/store';
-import type { Paper, Chapter, Routine, Transaction, Exam, FocusSession, DiaryEntry, Lesson } from '../lib/types';
+import type { Paper, Chapter, Routine, Transaction, Exam, MockScore, FocusSession, DiaryEntry, Lesson } from '../lib/types';
 import { chapterProgressScore, paperProgressScore, levelProgressScore, getGreeting, getCurriculumTree, formatCurrency, daysUntil, formatTime, todayISO } from '../lib/utils';
 import { CheckCircle2, Lock, Circle, Flame, Clock, TrendingUp, Calendar, BookOpen, Target, Award, FileText } from 'lucide-react';
 
@@ -15,13 +15,14 @@ export default function Home() {
   const [routines, setRoutines] = useState<Routine[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [exams, setExams] = useState<Exam[]>([]);
+  const [mocks, setMocks] = useState<MockScore[]>([]);
   const [sessions, setSessions] = useState<FocusSession[]>([]);
   const [diary, setDiary] = useState<DiaryEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     (async () => {
-      const [p, c, l, r, t, e, s, d] = await Promise.all([
+      const [p, c, l, r, t, e, s, d, m] = await Promise.all([
         getAll<Paper>('papers'),
         getAll<Chapter>('chapters'),
         getAll<Lesson>('lessons'),
@@ -30,9 +31,10 @@ export default function Home() {
         getAll<Exam>('exams'),
         getAll<FocusSession>('focus_sessions'),
         getAll<DiaryEntry>('diary_entries'),
+        getAll<MockScore>('mock_scores'),
       ]);
       setPapers(p); setChapters(c); setLessons(l); setRoutines(r); setTransactions(t);
-      setExams(e); setSessions(s); setDiary(d);
+      setExams(e); setSessions(s); setDiary(d); setMocks(m.sort((a, b) => b.date.localeCompare(a.date)));
       setLoading(false);
     })();
   }, [refreshKey]);
@@ -73,7 +75,7 @@ export default function Home() {
 
   const upcomingExams = exams.filter(e => daysUntil(e.date) >= 0).sort((a, b) => daysUntil(a.date) - daysUntil(b.date));
   const nextExam = upcomingExams[0];
-  const pastExamsWithResults = exams.filter(e => e.marks_total > 0).sort((a, b) => b.date.localeCompare(a.date));
+  const recentMocks = mocks.slice(0, 6);
 
   const todaySessions = sessions.filter(s => s.completed_at.startsWith(today));
   const todayFocusMin = todaySessions.reduce((s, sess) => s + sess.duration, 0);
@@ -160,26 +162,29 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Exam Results */}
-      {pastExamsWithResults.length > 0 && (
+      {/* Mock results — shared with Settings + Planner */}
+      {recentMocks.length > 0 && (
         <div className="y-panel p-5">
           <div className="flex items-center gap-2 mb-3">
             <Award size={16} className="text-[#E8B86D]" />
-            <h3 className="text-sm font-semibold text-[#D6CFC4]">Exam Results</h3>
+            <h3 className="text-sm font-semibold text-[#D6CFC4]">Recent Mocks</h3>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {pastExamsWithResults.map(ex => {
-              const pct = ex.marks_total > 0 ? Math.round((ex.marks_obtained / ex.marks_total) * 100) : 0;
+            {recentMocks.map(m => {
+              const pct = m.max_score > 0 ? Math.round((m.score / m.max_score) * 100) : 0;
+              const neg = (m.wrong_guesses || 0) * 0.25;
               return (
-                <div key={ex.id} className="rounded-xl bg-black/25 p-3">
-                  <div className="text-sm font-medium text-[#EDE6DA] truncate">{ex.name}</div>
+                <div key={m.id} className="rounded-xl bg-black/25 p-3">
+                  <div className="text-sm font-medium text-[#EDE6DA] truncate">{m.paper}</div>
+                  <div className="text-[10px] text-[#8A8478] mt-0.5">{m.date}</div>
                   <div className="flex items-center justify-between mt-1">
-                    <span className="text-xs text-[#F7F1E7]0">{ex.marks_obtained}/{ex.marks_total}</span>
-                    <span className={`text-sm font-bold ${pct >= 40 ? 'text-[#8FBC8F]' : 'text-[#E07A5F]'}`}>{pct}%</span>
+                    <span className="text-xs text-[#8A8478]">{m.score}/{m.max_score}</span>
+                    <span className={`text-sm font-bold ${pct >= 70 ? 'text-[#8FBC8F]' : pct >= 40 ? 'text-[#E8B86D]' : 'text-[#E07A5F]'}`}>{pct}%</span>
                   </div>
                   <div className="mt-1.5 h-1.5 rounded-full bg-[#2A261F] overflow-hidden">
-                    <div className={`h-full rounded-full ${pct >= 40 ? 'bg-[#8FBC8F]' : 'bg-[#E07A5F]'}`} style={{ width: `${pct}%` }} />
+                    <div className={`h-full rounded-full ${pct >= 70 ? 'bg-[#8FBC8F]' : pct >= 40 ? 'bg-[#E8B86D]' : 'bg-[#E07A5F]'}`} style={{ width: `${Math.min(100, pct)}%` }} />
                   </div>
+                  {neg > 0 && <div className="mt-1 text-[10px] text-[#E07A5F]">−{neg} from wrong guesses</div>}
                 </div>
               );
             })}
