@@ -10,7 +10,7 @@ import {
 import Modal from './Modal';
 import EmptyState from './EmptyState';
 import {
-  Target, Flame, CheckCircle2, Circle, Plus, Trash2, Calendar,
+  Target, Flame, CheckCircle2, Circle, Plus, Trash2, Edit2, Calendar,
   BookOpen, Award, ChevronLeft, ChevronRight, Download, AlertTriangle
 } from 'lucide-react';
 
@@ -32,6 +32,7 @@ export default function RevisionPlanView({ routines, chapters, onRoutinesChanged
   const { refreshAll } = useApp();
   const [mocks, setMocks] = useState<MockScore[]>([]);
   const [mockModal, setMockModal] = useState(false);
+  const [editingMock, setEditingMock] = useState<MockScore | null>(null);
   const [seeding, setSeeding] = useState(false);
   const [seedMsg, setSeedMsg] = useState('');
   const [filterPhase, setFilterPhase] = useState<'all' | 1 | 2>('all');
@@ -149,20 +150,25 @@ export default function RevisionPlanView({ routines, chapters, onRoutinesChanged
   };
 
   const saveMock = async (data: Partial<MockScore>) => {
-    await addRecord('mock_scores', {
+    const payload = {
       date: data.date || today,
       paper: data.paper || '',
-      score: data.score || 0,
-      max_score: data.max_score || 100,
-      confident_attempts: data.confident_attempts || 0,
-      guessed_attempts: data.guessed_attempts || 0,
-      wrong_guesses: data.wrong_guesses || 0,
+      score: data.score ?? 0,
+      max_score: data.max_score ?? 100,
+      confident_attempts: data.confident_attempts ?? 0,
+      guessed_attempts: data.guessed_attempts ?? 0,
+      wrong_guesses: data.wrong_guesses ?? 0,
       notes: data.notes || '',
-      created_at: new Date().toISOString(),
-    });
+    };
+    if (editingMock) {
+      await updateRecord('mock_scores', editingMock.id, payload);
+    } else {
+      await addRecord('mock_scores', { ...payload, created_at: new Date().toISOString() });
+    }
     const m = await getAll<MockScore>('mock_scores');
     setMocks(m.sort((a, b) => b.date.localeCompare(a.date)));
     setMockModal(false);
+    setEditingMock(null);
     refreshAll();
   };
 
@@ -342,7 +348,7 @@ export default function RevisionPlanView({ routines, chapters, onRoutinesChanged
             <h3 className="text-sm font-semibold text-[#D6CFC4]">Mock Score Log</h3>
           </div>
           <button
-            onClick={() => setMockModal(true)}
+            onClick={() => { setEditingMock(null); setMockModal(true); }}
             className="flex items-center gap-1 text-xs text-[#E8B86D] hover:underline"
           >
             <Plus size={14} /> Log mock
@@ -362,8 +368,11 @@ export default function RevisionPlanView({ routines, chapters, onRoutinesChanged
                       <div className="text-[10px] text-[#F7F1E7]0">{formatDate(m.date)}</div>
                     </div>
                     <div className="text-right">
-                      <div className="text-lg font-bold text-[#E8B86D]">{m.score}<span className="text-xs text-[#F7F1E7]0">/{m.max_score}</span></div>
-                      <button onClick={() => deleteMock(m.id)} className="text-[#6B6560] hover:text-[#E07A5F]"><Trash2 size={12} /></button>
+                      <div className="text-lg font-bold text-[#E8B86D]">{m.score}<span className="text-xs text-[#8A8478]">/{m.max_score}</span></div>
+                      <div className="flex items-center justify-end gap-2 mt-0.5">
+                        <button onClick={() => { setEditingMock(m); setMockModal(true); }} className="text-[#8A8478] hover:text-[#D6CFC4]"><Edit2 size={12} /></button>
+                        <button onClick={() => deleteMock(m.id)} className="text-[#6B6560] hover:text-[#E07A5F]"><Trash2 size={12} /></button>
+                      </div>
                     </div>
                   </div>
                   <div className="mt-1.5 flex flex-wrap gap-2 text-[10px] text-[#F7F1E7]0">
@@ -381,14 +390,20 @@ export default function RevisionPlanView({ routines, chapters, onRoutinesChanged
       </div>
 
       {mockModal && (
-        <MockScoreModal open={mockModal} onClose={() => setMockModal(false)} onSave={saveMock} />
+        <MockScoreModal
+          open={mockModal}
+          editing={editingMock}
+          onClose={() => { setMockModal(false); setEditingMock(null); }}
+          onSave={saveMock}
+        />
       )}
     </div>
   );
 }
 
-function MockScoreModal({ open, onClose, onSave }: {
+function MockScoreModal({ open, editing, onClose, onSave }: {
   open: boolean;
+  editing: MockScore | null;
   onClose: () => void;
   onSave: (d: Partial<MockScore>) => void;
 }) {
@@ -401,6 +416,19 @@ function MockScoreModal({ open, onClose, onSave }: {
   const [wrong, setWrong] = useState(0);
   const [notes, setNotes] = useState('');
 
+  useEffect(() => {
+    if (open) {
+      setDate(editing?.date || todayISO());
+      setPaper(editing?.paper || 'Paper 1 Accounting');
+      setScore(editing?.score ?? 0);
+      setMaxScore(editing?.max_score ?? 100);
+      setConfident(editing?.confident_attempts ?? 0);
+      setGuessed(editing?.guessed_attempts ?? 0);
+      setWrong(editing?.wrong_guesses ?? 0);
+      setNotes(editing?.notes || '');
+    }
+  }, [open, editing]);
+
   const papers = [
     'Paper 1 Accounting',
     'Paper 2 Business Laws',
@@ -409,7 +437,7 @@ function MockScoreModal({ open, onClose, onSave }: {
   ];
 
   return (
-    <Modal open={open} onClose={onClose} title="Log Mock Score">
+    <Modal open={open} onClose={onClose} title={editing ? 'Edit Mock Score' : 'Log Mock Score'}>
       <div className="space-y-3">
         <div>
           <label className="mb-1 block text-xs font-medium text-[#A8A29A]">Date</label>
@@ -453,7 +481,7 @@ function MockScoreModal({ open, onClose, onSave }: {
           onClick={() => onSave({ date, paper, score, max_score: maxScore, confident_attempts: confident, guessed_attempts: guessed, wrong_guesses: wrong, notes })}
           className="w-full rounded-xl bg-[#E8B86D] px-4 py-2.5 text-sm font-semibold text-black hover:bg-[#F0C98A]"
         >
-          Save Mock
+          {editing ? 'Save Changes' : 'Save Mock'}
         </button>
       </div>
     </Modal>

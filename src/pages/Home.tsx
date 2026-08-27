@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { getAll } from '../lib/store';
 import type { Paper, Chapter, Routine, Transaction, Exam, MockScore, FocusSession, DiaryEntry, Lesson } from '../lib/types';
+import { EXAM_DATE } from '../lib/revisionPlan';
 import { chapterProgressScore, paperProgressScore, levelProgressScore, getGreeting, getCurriculumTree, formatCurrency, daysUntil, formatTime, todayISO } from '../lib/utils';
 import { CheckCircle2, Lock, Circle, Flame, Clock, TrendingUp, Calendar, BookOpen, Target, Award, FileText } from 'lucide-react';
 
@@ -73,8 +74,11 @@ export default function Home() {
   const expense = transactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
   const balance = income - expense;
 
-  const upcomingExams = exams.filter(e => daysUntil(e.date) >= 0).sort((a, b) => daysUntil(a.date) - daysUntil(b.date));
+  const upcomingExams = exams.filter(ex => daysUntil(ex.date) >= 0).sort((a, b) => daysUntil(a.date) - daysUntil(b.date));
   const nextExam = upcomingExams[0];
+  const examDaysLeft = nextExam ? daysUntil(nextExam.date) : daysUntil(EXAM_DATE);
+  const examLabel = nextExam ? nextExam.name : 'CA Foundation';
+  const examDateLabel = nextExam ? nextExam.date : EXAM_DATE;
   const recentMocks = mocks.slice(0, 6);
 
   const todaySessions = sessions.filter(s => s.completed_at.startsWith(today));
@@ -150,14 +154,11 @@ export default function Home() {
               <Calendar size={14} className="text-[#E8B86D]" />
               <span className="text-xs font-medium">Next Exam</span>
             </div>
-            {nextExam ? (
-              <div className="mt-2">
-                <div className="text-3xl font-bold text-[#E8B86D]">{daysUntil(nextExam.date)}</div>
-                <div className="text-xs text-[#F7F1E7]0">days to {nextExam.name}</div>
-              </div>
-            ) : (
-              <p className="mt-2 text-sm text-[#6B6560]">No exams scheduled</p>
-            )}
+            <div className="mt-2">
+              <div className="text-3xl font-bold text-[#E8B86D]">{Math.max(0, examDaysLeft)}</div>
+              <div className="text-xs text-[#8A8478]">days to {examLabel}</div>
+              <div className="text-[10px] text-[#6B6560] mt-0.5">{examDateLabel}</div>
+            </div>
           </div>
         </div>
       </div>

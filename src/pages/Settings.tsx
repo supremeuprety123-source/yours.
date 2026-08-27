@@ -38,11 +38,12 @@ const SECTIONS = [
 export default function Settings() {
   const { profile, refreshProfile, refreshAll, online, syncStatus, forceSync } = useApp();
   const [exams, setExams] = useState<Exam[]>([]);
-  const [examDateModal, setExamDateModal] = useState(false);
+  const [examModal, setExamModal] = useState(false);
   const [editingExam, setEditingExam] = useState<Exam | null>(null);
   const [deleteExam, setDeleteExam] = useState<Exam | null>(null);
   const [mocks, setMocks] = useState<MockScore[]>([]);
   const [mockModal, setMockModal] = useState(false);
+  const [editingMock, setEditingMock] = useState<MockScore | null>(null);
   const [deleteMock, setDeleteMock] = useState<MockScore | null>(null);
   const [pinChange, setPinChange] = useState(false);
   const [newPin, setNewPin] = useState('');
@@ -53,7 +54,7 @@ export default function Settings() {
   const [diagResult, setDiagResult] = useState<string>('');
   const [diagRunning, setDiagRunning] = useState(false);
 
-  const loadExamData = async () => {
+  const loadExamAndMocks = async () => {
     const [e, m] = await Promise.all([
       getAll<Exam>('exams'),
       getAll<MockScore>('mock_scores'),
@@ -62,7 +63,7 @@ export default function Settings() {
     setMocks(m.sort((a, b) => b.date.localeCompare(a.date)));
   };
 
-  useEffect(() => { loadExamData(); }, []);
+  useEffect(() => { loadExamAndMocks(); }, []);
 
   if (!profile) return null;
 
@@ -78,15 +79,15 @@ export default function Settings() {
     showSaved('Saved');
   };
 
-  const handleSaveExamDate = async (name: string, date: string) => {
+  const handleSaveExam = async (name: string, date: string) => {
     if (editingExam) {
       await updateRecord('exams', editingExam.id, { name, date });
     } else {
       await addRecord('exams', { name, date, marks_obtained: 0, marks_total: 0 });
     }
-    setExamDateModal(false);
+    setExamModal(false);
     setEditingExam(null);
-    await loadExamData();
+    await loadExamAndMocks();
     refreshAll();
   };
 
@@ -94,24 +95,29 @@ export default function Settings() {
     if (!deleteExam) return;
     await removeRecord('exams', deleteExam.id);
     setDeleteExam(null);
-    await loadExamData();
+    await loadExamAndMocks();
     refreshAll();
   };
 
   const handleSaveMock = async (data: Partial<MockScore>) => {
-    await addRecord('mock_scores', {
+    const payload = {
       date: data.date || todayISO(),
       paper: data.paper || '',
-      score: data.score || 0,
-      max_score: data.max_score || 100,
-      confident_attempts: data.confident_attempts || 0,
-      guessed_attempts: data.guessed_attempts || 0,
-      wrong_guesses: data.wrong_guesses || 0,
+      score: data.score ?? 0,
+      max_score: data.max_score ?? 100,
+      confident_attempts: data.confident_attempts ?? 0,
+      guessed_attempts: data.guessed_attempts ?? 0,
+      wrong_guesses: data.wrong_guesses ?? 0,
       notes: data.notes || '',
-      created_at: new Date().toISOString(),
-    });
+    };
+    if (editingMock) {
+      await updateRecord('mock_scores', editingMock.id, payload);
+    } else {
+      await addRecord('mock_scores', { ...payload, created_at: new Date().toISOString() });
+    }
     setMockModal(false);
-    await loadExamData();
+    setEditingMock(null);
+    await loadExamAndMocks();
     refreshAll();
   };
 
@@ -119,7 +125,7 @@ export default function Settings() {
     if (!deleteMock) return;
     await removeRecord('mock_scores', deleteMock.id);
     setDeleteMock(null);
-    await loadExamData();
+    await loadExamAndMocks();
     refreshAll();
   };
 
@@ -292,31 +298,35 @@ export default function Settings() {
         </div>
       </SettingsCard>
 
-      {/* Official exam dates — for Home countdown */}
+      {/* Official exam dates — Home countdown */}
       <SettingsCard icon={<Calendar size={18} />} title="Official Exam Dates">
-        <p className="text-xs text-[#8A8478] mb-3">Upcoming real exam dates (shown on Home). Mock practice scores live below and in Planner → Plan.</p>
+        <p className="text-xs text-[#8A8478] mb-3">Shown as countdown on Home. Syncs with Supabase.</p>
         <div className="space-y-2">
           {exams.length === 0 ? (
-            <p className="text-sm text-[#6B6560] py-1">No exam dates set.</p>
+            <p className="text-sm text-[#6B6560] py-1">No exam dates yet.</p>
           ) : (
             exams.map(ex => (
               <div key={ex.id} className="flex items-center gap-3 rounded-lg bg-black/25 px-3 py-2">
                 <div className="flex-1 min-w-0">
                   <div className="text-sm text-[#EDE6DA]">{ex.name}</div>
-                  <div className="text-xs text-[#8A8478]">{formatDate(ex.date)} · {daysUntil(ex.date) >= 0 ? `${daysUntil(ex.date)} days left` : 'past'}</div>
+                  <div className="text-xs text-[#8A8478]">
+                    {formatDate(ex.date)} · {daysUntil(ex.date) >= 0 ? `${daysUntil(ex.date)} days left` : 'past'}
+                  </div>
                 </div>
-                <button onClick={() => { setEditingExam(ex); setExamDateModal(true); }} className="text-[#8A8478] hover:text-[#D6CFC4]"><Edit2 size={14} /></button>
+                <button onClick={() => { setEditingExam(ex); setExamModal(true); }} className="text-[#8A8478] hover:text-[#D6CFC4]"><Edit2 size={14} /></button>
                 <button onClick={() => setDeleteExam(ex)} className="text-[#8A8478] hover:text-[#E07A5F]"><Trash2 size={14} /></button>
               </div>
             ))
           )}
-          <button onClick={() => { setEditingExam(null); setExamDateModal(true); }} className="flex items-center gap-1.5 text-sm text-[#E8B86D] hover:underline pt-1"><Plus size={16} /> Add exam date</button>
+          <button onClick={() => { setEditingExam(null); setExamModal(true); }} className="flex items-center gap-1.5 text-sm text-[#E8B86D] hover:underline pt-1">
+            <Plus size={16} /> Add exam date
+          </button>
         </div>
       </SettingsCard>
 
       {/* Mock Score Log — same data as Planner → Plan */}
       <SettingsCard icon={<Award size={18} />} title="Mock Score Log">
-        <p className="text-xs text-[#8A8478] mb-3">Same log as Planner → Plan. Scores sync across both places.</p>
+        <p className="text-xs text-[#8A8478] mb-3">Same log as Planner → Plan. Syncs to Supabase.</p>
         <div className="space-y-2">
           {mocks.length === 0 ? (
             <p className="text-sm text-[#6B6560] py-1">No mocks logged yet.</p>
@@ -332,7 +342,10 @@ export default function Settings() {
                     </div>
                     <div className="text-right shrink-0">
                       <div className="text-lg font-bold text-[#E8B86D]">{m.score}<span className="text-xs text-[#8A8478]">/{m.max_score}</span></div>
-                      <button onClick={() => setDeleteMock(m)} className="text-[#6B6560] hover:text-[#E07A5F]"><Trash2 size={12} /></button>
+                      <div className="flex items-center justify-end gap-2 mt-0.5">
+                        <button onClick={() => { setEditingMock(m); setMockModal(true); }} className="text-[#8A8478] hover:text-[#D6CFC4]"><Edit2 size={12} /></button>
+                        <button onClick={() => setDeleteMock(m)} className="text-[#6B6560] hover:text-[#E07A5F]"><Trash2 size={12} /></button>
+                      </div>
                     </div>
                   </div>
                   <div className="mt-1.5 flex flex-wrap gap-2 text-[10px] text-[#8A8478]">
@@ -346,7 +359,9 @@ export default function Settings() {
               );
             })
           )}
-          <button onClick={() => setMockModal(true)} className="flex items-center gap-1.5 text-sm text-[#E8B86D] hover:underline pt-1"><Plus size={16} /> Log mock</button>
+          <button onClick={() => { setEditingMock(null); setMockModal(true); }} className="flex items-center gap-1.5 text-sm text-[#E8B86D] hover:underline pt-1">
+            <Plus size={16} /> Log mock
+          </button>
         </div>
       </SettingsCard>
 
@@ -473,18 +488,22 @@ export default function Settings() {
         </div>
       </SettingsCard>
 
-      {/* Exam date modal (countdown only) */}
-      {examDateModal && (
+      {examModal && (
         <ExamDateModal
-          open={examDateModal}
+          open={examModal}
           editing={editingExam}
-          onClose={() => { setExamDateModal(false); setEditingExam(null); }}
-          onSave={handleSaveExamDate}
+          onClose={() => { setExamModal(false); setEditingExam(null); }}
+          onSave={handleSaveExam}
         />
       )}
 
       {mockModal && (
-        <SettingsMockModal open={mockModal} onClose={() => setMockModal(false)} onSave={handleSaveMock} />
+        <SettingsMockModal
+          open={mockModal}
+          editing={editingMock}
+          onClose={() => { setMockModal(false); setEditingMock(null); }}
+          onSave={handleSaveMock}
+        />
       )}
 
       {/* PIN Change Modal */}
@@ -542,7 +561,12 @@ function Toggle({ on, onToggle }: { on: boolean; onToggle: () => void }) {
   );
 }
 
-function ExamDateModal({ open, editing, onClose, onSave }: { open: boolean; editing: Exam | null; onClose: () => void; onSave: (name: string, date: string) => void }) {
+function ExamDateModal({ open, editing, onClose, onSave }: {
+  open: boolean;
+  editing: Exam | null;
+  onClose: () => void;
+  onSave: (name: string, date: string) => void;
+}) {
   const [name, setName] = useState(editing?.name || '');
   const [date, setDate] = useState(editing?.date || '');
 
@@ -564,15 +588,18 @@ function ExamDateModal({ open, editing, onClose, onSave }: { open: boolean; edit
           <label className="mb-1.5 block text-sm font-medium text-[#D6CFC4]">Date</label>
           <input type="date" value={date} onChange={e => setDate(e.target.value)} className="w-full rounded-xl border border-[rgba(255,236,200,0.1)] bg-[#0F0E0C] px-4 py-2.5 text-[#F5F0E8] outline-none focus:border-[#E8B86D]" />
         </div>
-        <p className="text-xs text-[#8A8478]">Used for Home countdown only. Log practice scores in Mock Score Log.</p>
-        <button onClick={() => name.trim() && date && onSave(name.trim(), date)} disabled={!name.trim() || !date} className="y-btn y-btn-primary w-full disabled:opacity-40">{editing ? 'Save' : 'Add date'}</button>
+        <p className="text-xs text-[#8A8478]">Used for Home countdown. Mock scores are logged separately below.</p>
+        <button onClick={() => name.trim() && date && onSave(name.trim(), date)} disabled={!name.trim() || !date} className="y-btn y-btn-primary w-full disabled:opacity-40">
+          {editing ? 'Save' : 'Add date'}
+        </button>
       </div>
     </Modal>
   );
 }
 
-function SettingsMockModal({ open, onClose, onSave }: {
+function SettingsMockModal({ open, editing, onClose, onSave }: {
   open: boolean;
+  editing: MockScore | null;
   onClose: () => void;
   onSave: (d: Partial<MockScore>) => void;
 }) {
@@ -587,16 +614,16 @@ function SettingsMockModal({ open, onClose, onSave }: {
 
   useEffect(() => {
     if (open) {
-      setDate(todayISO());
-      setPaper('Paper 1 Accounting');
-      setScore(0);
-      setMaxScore(100);
-      setConfident(0);
-      setGuessed(0);
-      setWrong(0);
-      setNotes('');
+      setDate(editing?.date || todayISO());
+      setPaper(editing?.paper || 'Paper 1 Accounting');
+      setScore(editing?.score ?? 0);
+      setMaxScore(editing?.max_score ?? 100);
+      setConfident(editing?.confident_attempts ?? 0);
+      setGuessed(editing?.guessed_attempts ?? 0);
+      setWrong(editing?.wrong_guesses ?? 0);
+      setNotes(editing?.notes || '');
     }
-  }, [open]);
+  }, [open, editing]);
 
   const papers = [
     'Paper 1 Accounting',
@@ -606,7 +633,7 @@ function SettingsMockModal({ open, onClose, onSave }: {
   ];
 
   return (
-    <Modal open={open} onClose={onClose} title="Log Mock Score">
+    <Modal open={open} onClose={onClose} title={editing ? 'Edit Mock Score' : 'Log Mock Score'}>
       <div className="space-y-3">
         <div>
           <label className="mb-1 block text-xs font-medium text-[#A8A29A]">Date</label>
@@ -650,7 +677,7 @@ function SettingsMockModal({ open, onClose, onSave }: {
           onClick={() => onSave({ date, paper, score, max_score: maxScore, confident_attempts: confident, guessed_attempts: guessed, wrong_guesses: wrong, notes })}
           className="y-btn y-btn-primary w-full"
         >
-          Save Mock
+          {editing ? 'Save Changes' : 'Save Mock'}
         </button>
       </div>
     </Modal>
