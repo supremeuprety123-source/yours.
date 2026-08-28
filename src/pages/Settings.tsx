@@ -8,7 +8,6 @@ import type { Profile, Exam, MockScore, CALevel } from '../lib/types';
 import { formatDate, daysUntil, todayISO } from '../lib/utils';
 import Modal from '../components/Modal';
 import ConfirmDialog from '../components/ConfirmDialog';
-import EmptyState from '../components/EmptyState';
 import { User, Calendar, Lock, DollarSign, Timer, Bell, RefreshCw, Download, Info, Plus, Edit2, Trash2, Check, AlertCircle, Award } from 'lucide-react';
 
 const CURRENCIES = [

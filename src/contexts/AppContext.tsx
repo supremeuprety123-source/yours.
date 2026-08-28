@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
 import { db } from '../lib/db';
-import { doSync, pullFromCloud, setSyncCallback, triggerSync, fullSync } from '../lib/sync';
+import { pullFromCloud, setSyncCallback, triggerSync, fullSync } from '../lib/sync';
 import type { Profile } from '../lib/types';
 
 export type PageName = 'home' | 'study' | 'planner' | 'finance' | 'diary' | 'settings';

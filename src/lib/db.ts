@@ -1,7 +1,7 @@
 import Dexie, { Table } from 'dexie';
 import type {
   Profile, Paper, Chapter, Lesson, RevisionHistory, Routine,
-  FocusSession, Category, Transaction, DiaryEntry, LifeNote, Exam, MockScore, DeletedRecord
+  FocusSession, Category, Transaction, DiaryEntry, LifeNote, Exam, MockScore, DayLog, DeletedRecord
 } from './types';
 
 export class YoursDB extends Dexie {

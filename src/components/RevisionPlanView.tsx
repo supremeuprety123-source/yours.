@@ -1,14 +1,13 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { getAll, addRecord, updateRecord, removeRecord } from '../lib/store';
-import type { Routine, Chapter, MockScore, Paper } from '../lib/types';
+import type { Routine, Chapter, MockScore } from '../lib/types';
 import { todayISO, formatDate, daysUntil } from '../lib/utils';
 import {
   REVISION_PLAN, PLAN_START, PLAN_END, EXAM_DATE, PHASE1_END,
   DAILY_FIXED_SLOTS, getPlanDay, type PlanDay
 } from '../lib/revisionPlan';
 import Modal from './Modal';
-import EmptyState from './EmptyState';
 import {
   Target, Flame, CheckCircle2, Circle, Plus, Trash2, Edit2, Calendar,
   BookOpen, Award, ChevronLeft, ChevronRight, Download, AlertTriangle
