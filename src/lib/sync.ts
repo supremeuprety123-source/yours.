@@ -5,7 +5,7 @@ import type { TableName } from './types';
 const SYNC_TABLES: TableName[] = [
   'profile', 'papers', 'chapters', 'lessons', 'revision_history',
   'routines', 'focus_sessions', 'categories', 'transactions',
-  'diary_entries', 'life_notes', 'exams', 'mock_scores'
+  'diary_entries', 'life_notes', 'exams', 'mock_scores', 'day_logs'
 ];
 
 let syncTimer: ReturnType<typeof setTimeout> | null = null;
@@ -99,8 +99,8 @@ export async function pullFromCloud(): Promise<boolean> {
         const { data, error } = await supabase.from(table).select('*');
         if (error) {
           // mock_scores may not exist yet on older Supabase — skip quietly
-          if (table === 'mock_scores') {
-            console.warn('[sync] mock_scores table missing on cloud — run updated SQL');
+          if (table === 'mock_scores' || table === 'day_logs') {
+            console.warn(`[sync] ${table} missing on cloud — run updated SQL`);
             continue;
           }
           console.error(`[sync] Error pulling ${table}:`, error.message);

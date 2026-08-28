@@ -24,7 +24,9 @@ export default function Finance() {
   const [deleteTarget, setDeleteTarget] = useState<{ type: 'tx' | 'cat'; id: string; name: string } | null>(null);
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'income' | 'expense'>('all');
-  const [period, setPeriod] = useState<'all' | 'month' | '3months' | 'year'>('all');
+  const [period, setPeriod] = useState<'all' | 'month' | '3months' | 'year' | 'custom'>('all');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
 
   const loadData = async () => {
     const [t, c] = await Promise.all([getAll<Transaction>('transactions'), getAll<Category>('categories')]);
@@ -47,7 +49,10 @@ export default function Finance() {
       const s = search.toLowerCase();
       if (!t.description.toLowerCase().includes(s) && !t.category.toLowerCase().includes(s) && !t.from_to.toLowerCase().includes(s)) return false;
     }
-    if (period !== 'all') {
+    if (period === 'custom') {
+      if (customFrom && t.date < customFrom) return false;
+      if (customTo && t.date > customTo) return false;
+    } else if (period !== 'all') {
       const now = new Date();
       const txDate = new Date(t.date + 'T00:00');
       if (period === 'month') { if (txDate.getMonth() !== now.getMonth() || txDate.getFullYear() !== now.getFullYear()) return false; }
@@ -96,7 +101,27 @@ export default function Finance() {
   const topCat = Object.entries(expenseByCat).sort((a,b) => b[1] - a[1])[0];
   const topSource = filteredTx.filter(t => t.type === 'income').reduce<Record<string, number>>((acc, t) => { acc[t.from_to] = (acc[t.from_to] || 0) + t.amount; return acc; }, {});
   const topSourceEntry = Object.entries(topSource).sort((a,b) => b[1] - a[1])[0];
-  const dailyAvg = expense > 0 ? Math.round(expense / new Set(filteredTx.map(t => t.date)).size) : 0;
+  const dailyAvg = expense > 0 ? Math.round(expense / Math.max(1, new Set(filteredTx.map(t => t.date)).size)) : 0;
+
+  // Payment method breakdown (Cash, Esewa, etc.)
+  const methodMap: Record<string, { income: number; expense: number }> = {};
+  filteredTx.forEach(t => {
+    const m = (t.payment_method || 'Other').trim() || 'Other';
+    if (!methodMap[m]) methodMap[m] = { income: 0, expense: 0 };
+    if (t.type === 'income') methodMap[m].income += t.amount;
+    else methodMap[m].expense += t.amount;
+  });
+  // Prefer common methods first, then any others used
+  const METHOD_ORDER = ['Cash', 'Esewa', 'Khalti', 'Bank Transfer', 'Card', 'Mobile Banking', 'Other'];
+  const usedMethods = Object.keys(methodMap);
+  const orderedMethods = [
+    ...METHOD_ORDER.filter(m => usedMethods.includes(m)),
+    ...usedMethods.filter(m => !METHOD_ORDER.includes(m)).sort(),
+  ];
+  const methodStats = orderedMethods.map(name => {
+    const { income: inc, expense: exp } = methodMap[name];
+    return { name, income: inc, expense: exp, balance: inc - exp };
+  });
 
   // Group transactions by date
   const grouped: Record<string, Transaction[]> = {};
@@ -136,10 +161,50 @@ export default function Finance() {
       </div>
 
       {/* Period filter */}
-      <div className="flex gap-2 flex-wrap">
-        {(['all','month','3months','year'] as const).map(p => (
-          <button key={p} onClick={() => setPeriod(p)} className={`rounded-lg px-3 py-1 text-xs font-medium ${period === p ? 'bg-[#E8B86D]/10 text-[#E8B86D]' : 'text-[#F7F1E7]0 hover:text-[#D6CFC4]'}`}>{p === '3months' ? '3M' : p === 'all' ? 'All Time' : p === 'month' ? 'This Month' : 'This Year'}</button>
-        ))}
+      <div className="space-y-2">
+        <div className="flex gap-2 flex-wrap">
+          {([
+            { key: 'all', label: 'All Time' },
+            { key: 'month', label: 'This Month' },
+            { key: '3months', label: '3M' },
+            { key: 'year', label: 'This Year' },
+            { key: 'custom', label: 'Custom' },
+          ] as const).map(p => (
+            <button
+              key={p.key}
+              onClick={() => setPeriod(p.key)}
+              className={`rounded-lg px-3 py-1 text-xs font-medium transition-colors ${period === p.key ? 'bg-[#E8B86D]/10 text-[#E8B86D]' : 'text-[#8A8478] hover:text-[#D6CFC4]'}`}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+        {period === 'custom' && (
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="text-xs text-[#8A8478]">From</label>
+            <input
+              type="date"
+              value={customFrom}
+              onChange={e => setCustomFrom(e.target.value)}
+              className="rounded-lg border border-[rgba(255,236,200,0.1)] bg-[#0F0E0C] px-2.5 py-1.5 text-xs text-[#F5F0E8] outline-none focus:border-[#E8B86D]"
+            />
+            <label className="text-xs text-[#8A8478]">To</label>
+            <input
+              type="date"
+              value={customTo}
+              onChange={e => setCustomTo(e.target.value)}
+              className="rounded-lg border border-[rgba(255,236,200,0.1)] bg-[#0F0E0C] px-2.5 py-1.5 text-xs text-[#F5F0E8] outline-none focus:border-[#E8B86D]"
+            />
+            {(customFrom || customTo) && (
+              <button
+                onClick={() => { setCustomFrom(''); setCustomTo(''); }}
+                className="text-xs text-[#8A8478] hover:text-[#E8B86D]"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {view === 'dashboard' && (
@@ -263,6 +328,85 @@ export default function Finance() {
             <EmptyState icon={<BarChart3 size={36} />} message="No data to report yet. Add transactions first." />
           ) : (
             <>
+              <div className="y-panel p-4">
+                <p className="text-xs text-[#8A8478]">
+                  Showing{' '}
+                  <span className="text-[#D6CFC4] font-medium">
+                    {period === 'custom'
+                      ? `${customFrom || '…'} → ${customTo || '…'}`
+                      : period === 'all'
+                      ? 'all time'
+                      : period === 'month'
+                      ? 'this month'
+                      : period === '3months'
+                      ? 'last 3 months'
+                      : 'this year'}
+                  </span>
+                  {' · '}
+                  {filteredTx.length} transaction{filteredTx.length === 1 ? '' : 's'}
+                </p>
+              </div>
+
+              {/* Summary for selected range */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="y-panel p-4">
+                  <div className="text-xs text-[#8A8478] mb-1">Net balance</div>
+                  <div className={`text-2xl font-bold ${balance >= 0 ? 'text-[#F5F0E8]' : 'text-[#E07A5F]'}`}>{formatCurrency(balance, sym)}</div>
+                </div>
+                <div className="y-panel p-4">
+                  <div className="text-xs text-[#8FBC8F] mb-1">Income</div>
+                  <div className="text-2xl font-bold text-[#8FBC8F]">{formatCurrency(income, sym)}</div>
+                </div>
+                <div className="y-panel p-4">
+                  <div className="text-xs text-[#E07A5F] mb-1">Expense</div>
+                  <div className="text-2xl font-bold text-[#E07A5F]">{formatCurrency(expense, sym)}</div>
+                </div>
+              </div>
+
+              {/* By payment method: Cash, Esewa, etc. */}
+              <div className="y-panel p-5">
+                <h3 className="text-sm font-semibold text-[#D6CFC4] mb-1">By payment method</h3>
+                <p className="text-xs text-[#8A8478] mb-4">Current net amount, income and expense for each wallet / method in this period.</p>
+                {methodStats.length === 0 ? (
+                  <p className="text-sm text-[#6B6560] py-2">No transactions in this period.</p>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {methodStats.map(m => (
+                      <div key={m.name} className="rounded-xl border border-[rgba(255,236,200,0.07)] bg-black/25 p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <span className="text-sm font-semibold text-[#EDE6DA]">{m.name}</span>
+                          <span className={`text-sm font-bold ${m.balance >= 0 ? 'text-[#8FBC8F]' : 'text-[#E07A5F]'}`}>
+                            {formatCurrency(m.balance, sym)}
+                          </span>
+                        </div>
+                        <div className="space-y-1.5 text-xs">
+                          <div className="flex justify-between">
+                            <span className="text-[#8A8478]">Income</span>
+                            <span className="text-[#8FBC8F] font-medium">{formatCurrency(m.income, sym)}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-[#8A8478]">Expense</span>
+                            <span className="text-[#E07A5F] font-medium">{formatCurrency(m.expense, sym)}</span>
+                          </div>
+                        </div>
+                        {(m.income + m.expense) > 0 && (
+                          <div className="mt-3 h-1.5 rounded-full bg-[#2A261F] overflow-hidden flex">
+                            <div
+                              className="h-full bg-[#8FBC8F]"
+                              style={{ width: `${(m.income / (m.income + m.expense)) * 100}%` }}
+                            />
+                            <div
+                              className="h-full bg-[#E07A5F]"
+                              style={{ width: `${(m.expense / (m.income + m.expense)) * 100}%` }}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <ReportCard label="Savings Rate" value={`${savingsRate}%`} color={savingsRate >= 20 ? '#8FBC8F' : '#E07A5F'} />
                 <ReportCard label="Top Category" value={topCat ? topCat[0] : '—'} sub={topCat ? formatCurrency(topCat[1], sym) : ''} color="#E8B86D" />

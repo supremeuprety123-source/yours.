@@ -180,6 +180,21 @@ export interface MockScore {
   sync_status: SyncStatus;
 }
 
+/** Actual time spent on a day (separate from planned routines) */
+export interface DayLog {
+  id: string;
+  date: string;
+  title: string;
+  category: string;
+  start_time: string;
+  end_time: string;
+  duration_min: number;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+  sync_status: SyncStatus;
+}
+
 export interface DeletedRecord {
   id: string;
   table: string;
@@ -191,4 +206,4 @@ export interface DeletedRecord {
 export type TableName =
   | 'profile' | 'papers' | 'chapters' | 'lessons' | 'revision_history'
   | 'routines' | 'focus_sessions' | 'categories' | 'transactions'
-  | 'diary_entries' | 'life_notes' | 'exams' | 'mock_scores';
+  | 'diary_entries' | 'life_notes' | 'exams' | 'mock_scores' | 'day_logs';

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { getAll, addRecord, updateRecord, removeRecord } from '../lib/store';
-import type { Routine, FocusSession, DiaryEntry, Chapter } from '../lib/types';
+import type { Routine, FocusSession, DiaryEntry, Chapter, DayLog } from '../lib/types';
 import RevisionPlanView from '../components/RevisionPlanView';
 import { todayISO, formatTime, formatDate, addDays, toLocalISO } from '../lib/utils';
 import Modal from '../components/Modal';
@@ -15,9 +15,15 @@ type TimerMode = 'stopwatch' | 'countdown' | 'pomodoro';
 
 const CATEGORY_COLORS: Record<string, string> = {
   Study: '#E8B86D',
+  Coaching: '#E8B86D',
+  College: '#3B82F6',
   Health: '#8FBC8F',
+  Exercise: '#8FBC8F',
   Work: '#3B82F6',
   Personal: '#8B5CF6',
+  Travel: '#F59E0B',
+  Sleep: '#6366F1',
+  Meals: '#EC4899',
   Break: '#E07A5F',
   Other: '#71717a',
 };
@@ -29,6 +35,10 @@ export default function Planner() {
   const [sessions, setSessions] = useState<FocusSession[]>([]);
   const [diary, setDiary] = useState<DiaryEntry[]>([]);
   const [chapters, setChapters] = useState<Chapter[]>([]);
+  const [dayLogs, setDayLogs] = useState<DayLog[]>([]);
+  const [logModal, setLogModal] = useState(false);
+  const [editingLog, setEditingLog] = useState<DayLog | null>(null);
+  const [deleteLog, setDeleteLog] = useState<DayLog | null>(null);
   const [loading, setLoading] = useState(true);
   const [routineModal, setRoutineModal] = useState(false);
   const [editingRoutine, setEditingRoutine] = useState<Routine | null>(null);
@@ -39,13 +49,14 @@ export default function Planner() {
   const [editingMilestone, setEditingMilestone] = useState<Routine | null>(null);
 
   const loadData = async () => {
-    const [r, s, d, c] = await Promise.all([
+    const [r, s, d, c, logs] = await Promise.all([
       getAll<Routine>('routines'),
       getAll<FocusSession>('focus_sessions'),
       getAll<DiaryEntry>('diary_entries'),
       getAll<Chapter>('chapters'),
+      getAll<DayLog>('day_logs'),
     ]);
-    setRoutines(r); setSessions(s); setDiary(d); setChapters(c);
+    setRoutines(r); setSessions(s); setDiary(d); setChapters(c); setDayLogs(logs);
     setLoading(false);
   };
 
@@ -76,9 +87,36 @@ export default function Planner() {
   const todaySessions = sessions.filter(s => s.completed_at.startsWith(selectedDate));
   const todayFocusMin = todaySessions.reduce((s, sess) => s + sess.duration, 0);
   const focusTarget = profile?.focus_target || 120;
-  const routineScore = todayRoutines.length > 0 ? (todayDone.length / todayRoutines.length) * 60 : 0;
-  const focusScore = Math.min(todayFocusMin / focusTarget, 1) * 40;
-  const productivityScore = Math.round(routineScore + focusScore);
+
+  const todayLogs = dayLogs
+    .filter(l => l.date === selectedDate)
+    .sort((a, b) => (a.start_time || '').localeCompare(b.start_time || ''));
+  const totalLoggedMin = todayLogs.reduce((s, l) => s + (l.duration_min || 0), 0);
+  const PRODUCTIVE_CATS = new Set(['Study', 'Coaching', 'Work', 'College']);
+  const productiveLoggedMin = todayLogs
+    .filter(l => PRODUCTIVE_CATS.has(l.category))
+    .reduce((s, l) => s + (l.duration_min || 0), 0);
+  const studyLoggedMin = todayLogs
+    .filter(l => l.category === 'Study' || l.category === 'Coaching')
+    .reduce((s, l) => s + (l.duration_min || 0), 0);
+
+  // Planned study minutes from routines (Study category) for selected day
+  const plannedStudyMin = todayRoutines
+    .filter(r => r.category === 'Study')
+    .reduce((s, r) => {
+      const [sh, sm] = (r.start_time || '0:0').split(':').map(Number);
+      const [eh, em] = (r.end_time || '0:0').split(':').map(Number);
+      let m = eh * 60 + em - (sh * 60 + sm);
+      if (m < 0) m += 24 * 60;
+      return s + Math.max(0, m);
+    }, 0);
+
+  // Real productivity (transparent weights)
+  // 35% routine checkoffs · 40% productive logged time vs target · 25% focus timer vs target
+  const routineScore = todayRoutines.length > 0 ? (todayDone.length / todayRoutines.length) * 35 : 0;
+  const productiveScore = Math.min((productiveLoggedMin + todayFocusMin) / focusTarget, 1) * 40;
+  const focusScore = Math.min(todayFocusMin / focusTarget, 1) * 25;
+  const productivityScore = Math.round(routineScore + productiveScore + focusScore);
 
   const weekData = Array.from({ length: 7 }).map((_, i) => {
     const d = new Date();
@@ -88,9 +126,11 @@ export default function Planner() {
     const dayDone = dayRoutines.filter(r => r.completed_dates?.includes(dateStr));
     const daySessions = sessions.filter(s => s.completed_at.startsWith(dateStr));
     const dayFocus = daySessions.reduce((s, sess) => s + sess.duration, 0);
-    const rScore = dayRoutines.length > 0 ? (dayDone.length / dayRoutines.length) * 60 : 0;
-    const fScore = Math.min(dayFocus / focusTarget, 1) * 40;
-    return { day: d.toLocaleDateString('en-US', { weekday: 'short' }), score: Math.round(rScore + fScore) };
+    const dayProdLog = dayLogs.filter(l => l.date === dateStr && PRODUCTIVE_CATS.has(l.category)).reduce((s, l) => s + (l.duration_min || 0), 0);
+    const rScore = dayRoutines.length > 0 ? (dayDone.length / dayRoutines.length) * 35 : 0;
+    const pScore = Math.min((dayProdLog + dayFocus) / focusTarget, 1) * 40;
+    const fScore = Math.min(dayFocus / focusTarget, 1) * 25;
+    return { day: d.toLocaleDateString('en-US', { weekday: 'short' }), score: Math.round(rScore + pScore + fScore) };
   });
 
   const monthData = Array.from({ length: 30 }).map((_, i) => {
@@ -101,9 +141,11 @@ export default function Planner() {
     const dayDone = dayRoutines.filter(r => r.completed_dates?.includes(dateStr));
     const daySessions = sessions.filter(s => s.completed_at.startsWith(dateStr));
     const dayFocus = daySessions.reduce((s, sess) => s + sess.duration, 0);
-    const rScore = dayRoutines.length > 0 ? (dayDone.length / dayRoutines.length) * 60 : 0;
-    const fScore = Math.min(dayFocus / focusTarget, 1) * 40;
-    return { day: `${d.getDate()}`, score: Math.round(rScore + fScore) };
+    const dayProdLog = dayLogs.filter(l => l.date === dateStr && PRODUCTIVE_CATS.has(l.category)).reduce((s, l) => s + (l.duration_min || 0), 0);
+    const rScore = dayRoutines.length > 0 ? (dayDone.length / dayRoutines.length) * 35 : 0;
+    const pScore = Math.min((dayProdLog + dayFocus) / focusTarget, 1) * 40;
+    const fScore = Math.min(dayFocus / focusTarget, 1) * 25;
+    return { day: `${d.getDate()}`, score: Math.round(rScore + pScore + fScore) };
   });
 
   let streak = 0;
@@ -114,7 +156,8 @@ export default function Planner() {
     const dayRoutines = getRoutinesForDate(dateStr);
     const dayDone = dayRoutines.filter(r => r.completed_dates?.includes(dateStr));
     const daySessions = sessions.filter(s => s.completed_at.startsWith(dateStr));
-    if (dayDone.length > 0 || daySessions.length > 0) {
+    const dayHasLog = dayLogs.some(l => l.date === dateStr);
+    if (dayDone.length > 0 || daySessions.length > 0 || dayHasLog) {
       streak++;
     } else if (i > 0) break;
   }
@@ -150,7 +193,13 @@ export default function Planner() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="y-page-title">Planner</h1>
-          <p className="text-sm text-[#F7F1E7]0 mt-1">Productivity: <span className="text-[#E8B86D] font-semibold">{productivityScore}/100</span> · Streak: <span className="text-[#E07A5F] font-semibold">{streak} days</span> {streak >= 7 && <Flame size={14} className="inline text-[#E07A5F]" />}</p>
+          <p className="text-sm text-[#8A8478] mt-1">
+            Productivity: <span className="text-[#E8B86D] font-semibold">{productivityScore}/100</span>
+            {' · '}Logged: <span className="text-[#D6CFC4] font-semibold">{formatTime(totalLoggedMin)}</span>
+            {' · '}Study: <span className="text-[#8FBC8F] font-semibold">{formatTime(studyLoggedMin + todayFocusMin)}</span>
+            {' · '}Streak: <span className="text-[#E07A5F] font-semibold">{streak}d</span>
+            {streak >= 7 && <Flame size={14} className="inline text-[#E07A5F] ml-1" />}
+          </p>
         </div>
         <button onClick={() => { setEditingRoutine(null); setRoutineModal(true); }} className="y-btn y-btn-primary flex items-center gap-2">
           <Plus size={18} /> Add Routine
@@ -195,6 +244,89 @@ export default function Planner() {
                     <span className="rounded-md px-2 py-0.5 text-[10px] font-medium" style={{ background: `${color}20`, color }}>{r.category}</span>
                     <button onClick={() => { setEditingRoutine(r); setRoutineModal(true); }} className="text-[#F7F1E7]0 hover:text-[#D6CFC4]"><Edit2 size={14} /></button>
                     <button onClick={() => setDeleteTarget(r)} className="text-[#F7F1E7]0 hover:text-[#E07A5F]"><Trash2 size={14} /></button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Actual time log — real day, not just the plan */}
+      {view === 'day' && (
+        <div className="y-panel p-4 space-y-4">
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div>
+              <div className="flex items-center gap-2">
+                <Clock size={16} className="text-[#E8B86D]" />
+                <h3 className="text-sm font-semibold text-[#EDE6DA]">Actual day log</h3>
+              </div>
+              <p className="text-xs text-[#8A8478] mt-1">
+                What really happened — wake up, college, study blocks, etc. Separate from planned routines.
+              </p>
+            </div>
+            <button
+              onClick={() => { setEditingLog(null); setLogModal(true); }}
+              className="flex items-center gap-1 text-xs font-medium text-[#E8B86D] hover:underline"
+            >
+              <Plus size={14} /> Log time
+            </button>
+          </div>
+
+          {/* Real stats for this date */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <div className="rounded-xl bg-black/25 px-3 py-2.5">
+              <div className="text-[10px] text-[#8A8478]">Total logged</div>
+              <div className="text-lg font-bold text-[#F5F0E8]">{formatTime(totalLoggedMin)}</div>
+            </div>
+            <div className="rounded-xl bg-black/25 px-3 py-2.5">
+              <div className="text-[10px] text-[#8A8478]">Study + coaching</div>
+              <div className="text-lg font-bold text-[#8FBC8F]">{formatTime(studyLoggedMin)}</div>
+            </div>
+            <div className="rounded-xl bg-black/25 px-3 py-2.5">
+              <div className="text-[10px] text-[#8A8478]">Focus timer</div>
+              <div className="text-lg font-bold text-[#E8B86D]">{formatTime(todayFocusMin)}</div>
+            </div>
+            <div className="rounded-xl bg-black/25 px-3 py-2.5">
+              <div className="text-[10px] text-[#8A8478]">Plan done</div>
+              <div className="text-lg font-bold text-[#D6CFC4]">{todayDone.length}/{todayRoutines.length}</div>
+            </div>
+          </div>
+
+          {plannedStudyMin > 0 && (
+            <div className="rounded-xl border border-[rgba(255,236,200,0.06)] bg-black/20 px-3 py-2 text-xs text-[#8A8478]">
+              Planned study blocks: <span className="text-[#D6CFC4]">{formatTime(plannedStudyMin)}</span>
+              {' · '}Actual study/coaching + timer:{' '}
+              <span className="text-[#8FBC8F]">{formatTime(studyLoggedMin + todayFocusMin)}</span>
+              {plannedStudyMin > 0 && (
+                <span className="ml-1">
+                  ({Math.round(((studyLoggedMin + todayFocusMin) / plannedStudyMin) * 100)}% of plan)
+                </span>
+              )}
+            </div>
+          )}
+
+          {todayLogs.length === 0 ? (
+            <p className="text-sm text-[#6B6560] py-2">
+              No real-time entries yet. Add what you actually did today — even if you skipped the planned routine.
+            </p>
+          ) : (
+            <div className="space-y-1.5">
+              {todayLogs.map(l => {
+                const color = CATEGORY_COLORS[l.category] || CATEGORY_COLORS.Other;
+                return (
+                  <div key={l.id} className="flex items-center gap-3 rounded-xl border border-[rgba(255,236,200,0.07)] bg-black/20 px-3 py-2.5">
+                    <div className="w-1 h-8 rounded-full shrink-0" style={{ background: color }} />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-[#EDE6DA] truncate">{l.title}</div>
+                      <div className="text-xs text-[#8A8478]">
+                        {l.start_time}–{l.end_time} · {formatTime(l.duration_min)}
+                        {l.notes ? ` · ${l.notes}` : ''}
+                      </div>
+                    </div>
+                    <span className="rounded-md px-2 py-0.5 text-[10px] font-medium shrink-0" style={{ background: `${color}20`, color }}>{l.category}</span>
+                    <button onClick={() => { setEditingLog(l); setLogModal(true); }} className="text-[#8A8478] hover:text-[#D6CFC4] shrink-0"><Edit2 size={14} /></button>
+                    <button onClick={() => setDeleteLog(l)} className="text-[#8A8478] hover:text-[#E07A5F] shrink-0"><Trash2 size={14} /></button>
                   </div>
                 );
               })}
@@ -340,6 +472,30 @@ export default function Planner() {
           </div>
         )}
       </Modal>
+
+      {logModal && (
+        <DayLogModal
+          open={logModal}
+          editing={editingLog}
+          defaultDate={selectedDate}
+          onClose={() => { setLogModal(false); setEditingLog(null); }}
+          onSaved={() => { setLogModal(false); setEditingLog(null); loadData(); refreshAll(); }}
+        />
+      )}
+
+      <ConfirmDialog
+        open={!!deleteLog}
+        title="Delete log entry"
+        message={`Delete "${deleteLog?.title}"?`}
+        onConfirm={async () => {
+          if (!deleteLog) return;
+          await removeRecord('day_logs', deleteLog.id);
+          setDeleteLog(null);
+          loadData();
+          refreshAll();
+        }}
+        onCancel={() => setDeleteLog(null)}
+      />
     </div>
   );
 }
@@ -961,6 +1117,124 @@ function LifeMilestoneModal({ open, editing, onClose, onSaved }: { open: boolean
 
         <button onClick={save} disabled={!title.trim()} className="y-btn y-btn-primary w-full disabled:opacity-40">
           {editing ? 'Save Changes' : 'Add Milestone'}
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+function minutesBetween(start: string, end: string): number {
+  if (!start || !end) return 0;
+  const [sh, sm] = start.split(':').map(Number);
+  const [eh, em] = end.split(':').map(Number);
+  let mins = (eh * 60 + (em || 0)) - (sh * 60 + (sm || 0));
+  if (mins < 0) mins += 24 * 60;
+  return Math.max(0, mins);
+}
+
+function DayLogModal({ open, editing, defaultDate, onClose, onSaved }: {
+  open: boolean;
+  editing: DayLog | null;
+  defaultDate: string;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [title, setTitle] = useState('');
+  const [category, setCategory] = useState('Study');
+  const [start, setStart] = useState('06:00');
+  const [end, setEnd] = useState('07:00');
+  const [notes, setNotes] = useState('');
+  const [durationOverride, setDurationOverride] = useState('');
+
+  const categories = ['Study', 'College', 'Coaching', 'Travel', 'Sleep', 'Meals', 'Exercise', 'Personal', 'Work', 'Break', 'Other'];
+
+  useEffect(() => {
+    if (open) {
+      setTitle(editing?.title || '');
+      setCategory(editing?.category || 'Study');
+      setStart(editing?.start_time || '06:00');
+      setEnd(editing?.end_time || '07:00');
+      setNotes(editing?.notes || '');
+      setDurationOverride(editing ? String(editing.duration_min) : '');
+    }
+  }, [open, editing]);
+
+  const autoMin = minutesBetween(start, end);
+  const durationMin = durationOverride !== '' ? Math.max(0, +durationOverride || 0) : autoMin;
+
+  const save = async () => {
+    if (!title.trim()) return;
+    const payload = {
+      date: editing?.date || defaultDate,
+      title: title.trim(),
+      category,
+      start_time: start,
+      end_time: end,
+      duration_min: durationMin,
+      notes: notes.trim(),
+    };
+    if (editing) await updateRecord('day_logs', editing.id, payload);
+    else await addRecord('day_logs', { ...payload, created_at: new Date().toISOString() });
+    onSaved();
+  };
+
+  return (
+    <Modal open={open} onClose={onClose} title={editing ? 'Edit time log' : 'Log actual time'}>
+      <div className="space-y-3">
+        <div>
+          <label className="mb-1 block text-xs font-medium text-[#A8A29A]">What did you do?</label>
+          <input
+            value={title}
+            onChange={e => setTitle(e.target.value)}
+            placeholder="e.g. Woke up, College, Accounting Ch.3 revision"
+            className="w-full rounded-xl border border-[rgba(255,236,200,0.1)] bg-[#0F0E0C] px-3 py-2.5 text-sm text-[#F5F0E8] outline-none focus:border-[#E8B86D]"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-[#A8A29A]">Category</label>
+          <div className="flex flex-wrap gap-1.5">
+            {categories.map(c => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => setCategory(c)}
+                className={`rounded-lg px-2.5 py-1 text-xs font-medium border transition-colors ${
+                  category === c
+                    ? 'border-[#E8B86D]/40 bg-[#E8B86D]/15 text-[#E8B86D]'
+                    : 'border-[rgba(255,236,200,0.08)] text-[#8A8478]'
+                }`}
+              >
+                {c}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-[#A8A29A]">Start</label>
+            <input type="time" value={start} onChange={e => { setStart(e.target.value); setDurationOverride(''); }} className="w-full rounded-xl border border-[rgba(255,236,200,0.1)] bg-[#0F0E0C] px-3 py-2.5 text-sm text-[#F5F0E8] outline-none focus:border-[#E8B86D]" />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-[#A8A29A]">End</label>
+            <input type="time" value={end} onChange={e => { setEnd(e.target.value); setDurationOverride(''); }} className="w-full rounded-xl border border-[rgba(255,236,200,0.1)] bg-[#0F0E0C] px-3 py-2.5 text-sm text-[#F5F0E8] outline-none focus:border-[#E8B86D]" />
+          </div>
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-[#A8A29A]">Duration (minutes)</label>
+          <input
+            type="number"
+            value={durationOverride !== '' ? durationOverride : autoMin}
+            onChange={e => setDurationOverride(e.target.value)}
+            className="w-full rounded-xl border border-[rgba(255,236,200,0.1)] bg-[#0F0E0C] px-3 py-2.5 text-sm text-[#F5F0E8] outline-none focus:border-[#E8B86D]"
+          />
+          <p className="text-[10px] text-[#6B6560] mt-1">Auto from start–end: {formatTime(autoMin)}. Edit to override.</p>
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-[#A8A29A]">Notes (optional)</label>
+          <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} className="w-full rounded-xl border border-[rgba(255,236,200,0.1)] bg-[#0F0E0C] px-3 py-2 text-sm text-[#F5F0E8] outline-none focus:border-[#E8B86D] resize-none" />
+        </div>
+        <button onClick={save} disabled={!title.trim() || durationMin <= 0} className="y-btn y-btn-primary w-full disabled:opacity-40">
+          {editing ? 'Save changes' : 'Save log'}
         </button>
       </div>
     </Modal>

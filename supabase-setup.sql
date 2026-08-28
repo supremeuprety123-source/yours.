@@ -1,27 +1,27 @@
 -- ============================================================
--- YOURS — Personal Life OS  ·  Supabase SQL Setup
--- Run this in: Supabase Dashboard → SQL Editor → New Query
--- Project: crukkzfwqnmsauvhyhdc
+-- YOURS — Personal Life OS  ·  Full Supabase SQL Setup
+-- Run in: Supabase Dashboard → SQL Editor → New Query
+-- Safe to re-run (IF NOT EXISTS / ADD COLUMN IF NOT EXISTS)
 -- ============================================================
 
--- 1. PROFILE TABLE
+-- 1. PROFILE
 CREATE TABLE IF NOT EXISTS profile (
-  id              text PRIMARY KEY,
-  name            text,
-  ca_level        text,
-  pin_enabled     boolean,
-  pin             text,
-  currency_code   text,
-  currency_symbol text,
-  focus_pomodoro  integer,
+  id                text PRIMARY KEY,
+  name              text,
+  ca_level          text,
+  pin_enabled       boolean,
+  pin               text,
+  currency_code     text,
+  currency_symbol   text,
+  focus_pomodoro    integer,
   focus_short_break integer,
   focus_long_break  integer,
-  focus_target    integer,
-  notifications   jsonb,
-  updated_at      timestamptz
+  focus_target      integer,
+  notifications     jsonb,
+  updated_at        timestamptz
 );
 
--- 2. PAPERS TABLE
+-- 2. PAPERS
 CREATE TABLE IF NOT EXISTS papers (
   id         text PRIMARY KEY,
   number     integer,
@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS papers (
   updated_at timestamptz
 );
 
--- 3. CHAPTERS TABLE
+-- 3. CHAPTERS (+ CA Foundation confidence / phase tracking)
 CREATE TABLE IF NOT EXISTS chapters (
   id             text PRIMARY KEY,
   paper_id       text,
@@ -46,29 +46,43 @@ CREATE TABLE IF NOT EXISTS chapters (
   marks_obtained numeric,
   marks_total    numeric,
   notes          text,
+  sort_order     integer,
+  confidence     text,
+  phase1_done    boolean,
+  phase2_done    boolean,
   created_at     timestamptz,
   updated_at     timestamptz
 );
 
--- 4. LESSONS TABLE
+ALTER TABLE chapters ADD COLUMN IF NOT EXISTS sort_order integer;
+ALTER TABLE chapters ADD COLUMN IF NOT EXISTS confidence text;
+ALTER TABLE chapters ADD COLUMN IF NOT EXISTS phase1_done boolean;
+ALTER TABLE chapters ADD COLUMN IF NOT EXISTS phase2_done boolean;
+
+-- 4. LESSONS
 CREATE TABLE IF NOT EXISTS lessons (
   id         text PRIMARY KEY,
   chapter_id text,
   name       text,
   completion integer,
   time_spent integer,
+  notes      text,
+  sort_order integer,
   created_at timestamptz,
   updated_at timestamptz
 );
 
--- 5. REVISION HISTORY TABLE
+ALTER TABLE lessons ADD COLUMN IF NOT EXISTS notes text;
+ALTER TABLE lessons ADD COLUMN IF NOT EXISTS sort_order integer;
+
+-- 5. REVISION HISTORY
 CREATE TABLE IF NOT EXISTS revision_history (
   id         text PRIMARY KEY,
   chapter_id text,
   revised_at timestamptz
 );
 
--- 6. ROUTINES TABLE
+-- 6. ROUTINES (+ plan_tag / notes for CA plan seeding)
 CREATE TABLE IF NOT EXISTS routines (
   id                text PRIMARY KEY,
   title             text,
@@ -82,11 +96,16 @@ CREATE TABLE IF NOT EXISTS routines (
   repeat_until      timestamptz,
   completed_dates   jsonb,
   date              text,
+  notes             text,
+  plan_tag          text,
   created_at        timestamptz,
   updated_at        timestamptz
 );
 
--- 7. FOCUS SESSIONS TABLE
+ALTER TABLE routines ADD COLUMN IF NOT EXISTS notes text;
+ALTER TABLE routines ADD COLUMN IF NOT EXISTS plan_tag text;
+
+-- 7. FOCUS SESSIONS
 CREATE TABLE IF NOT EXISTS focus_sessions (
   id           text PRIMARY KEY,
   type         text,
@@ -95,7 +114,7 @@ CREATE TABLE IF NOT EXISTS focus_sessions (
   completed_at timestamptz
 );
 
--- 8. CATEGORIES TABLE
+-- 8. CATEGORIES (finance)
 CREATE TABLE IF NOT EXISTS categories (
   id     text PRIMARY KEY,
   name   text,
@@ -103,7 +122,7 @@ CREATE TABLE IF NOT EXISTS categories (
   budget numeric
 );
 
--- 9. TRANSACTIONS TABLE
+-- 9. TRANSACTIONS
 CREATE TABLE IF NOT EXISTS transactions (
   id             text PRIMARY KEY,
   type           text,
@@ -119,20 +138,20 @@ CREATE TABLE IF NOT EXISTS transactions (
   updated_at     timestamptz
 );
 
--- 10. DIARY ENTRIES TABLE
+-- 10. DIARY ENTRIES
 CREATE TABLE IF NOT EXISTS diary_entries (
-  id                text PRIMARY KEY,
-  date              text,
-  mood              integer,
-  mental_tags       jsonb,
+  id                 text PRIMARY KEY,
+  date               text,
+  mood               integer,
+  mental_tags        jsonb,
   performance_rating integer,
-  journal_text      text,
-  learned           text,
-  planned           text,
-  updated_at        timestamptz
+  journal_text       text,
+  learned            text,
+  planned            text,
+  updated_at         timestamptz
 );
 
--- 11. LIFE NOTES TABLE
+-- 11. LIFE NOTES
 CREATE TABLE IF NOT EXISTS life_notes (
   id         text PRIMARY KEY,
   title      text,
@@ -144,18 +163,49 @@ CREATE TABLE IF NOT EXISTS life_notes (
   updated_at timestamptz
 );
 
--- 12. EXAMS TABLE
+-- 12. EXAMS (official exam dates for Home countdown)
 CREATE TABLE IF NOT EXISTS exams (
-  id   text PRIMARY KEY,
-  name text,
-  date text
+  id             text PRIMARY KEY,
+  name           text,
+  date           text,
+  marks_obtained numeric,
+  marks_total    numeric
+);
+
+ALTER TABLE exams ADD COLUMN IF NOT EXISTS marks_obtained numeric;
+ALTER TABLE exams ADD COLUMN IF NOT EXISTS marks_total numeric;
+
+-- 13. MOCK SCORES (Planner Plan + Settings mock log)
+CREATE TABLE IF NOT EXISTS mock_scores (
+  id                 text PRIMARY KEY,
+  date               text,
+  paper              text,
+  score              numeric,
+  max_score          numeric,
+  confident_attempts integer,
+  guessed_attempts   integer,
+  wrong_guesses      integer,
+  notes              text,
+  created_at         timestamptz,
+  updated_at         timestamptz
+);
+
+-- 14. DAY LOGS (Planner actual time spent — not planned routines)
+CREATE TABLE IF NOT EXISTS day_logs (
+  id           text PRIMARY KEY,
+  date         text,
+  title        text,
+  category     text,
+  start_time   text,
+  end_time     text,
+  duration_min integer,
+  notes        text,
+  created_at   timestamptz,
+  updated_at   timestamptz
 );
 
 -- ============================================================
--- DISABLE ROW LEVEL SECURITY ON ALL TABLES
--- This is a single-user, PIN-protected app (no Supabase Auth).
--- RLS is disabled so the anon key can read/write freely.
--- All security is handled client-side via the PIN lock screen.
+-- DISABLE RLS (single-user app; security is PIN on device)
 -- ============================================================
 
 ALTER TABLE profile           DISABLE ROW LEVEL SECURITY;
@@ -170,24 +220,9 @@ ALTER TABLE transactions      DISABLE ROW LEVEL SECURITY;
 ALTER TABLE diary_entries     DISABLE ROW LEVEL SECURITY;
 ALTER TABLE life_notes        DISABLE ROW LEVEL SECURITY;
 ALTER TABLE exams             DISABLE ROW LEVEL SECURITY;
+ALTER TABLE mock_scores       DISABLE ROW LEVEL SECURITY;
+ALTER TABLE day_logs          DISABLE ROW LEVEL SECURITY;
 
 -- ============================================================
--- DONE — Your YOURS database is ready.
+-- DONE — YOURS cloud schema ready
 -- ============================================================
-
--- 13. MOCK SCORES TABLE (CA Foundation plan)
-CREATE TABLE IF NOT EXISTS mock_scores (
-  id                  text PRIMARY KEY,
-  date                text,
-  paper               text,
-  score               numeric,
-  max_score           numeric,
-  confident_attempts  integer,
-  guessed_attempts    integer,
-  wrong_guesses       integer,
-  notes               text,
-  created_at          timestamptz,
-  updated_at          timestamptz
-);
-
-ALTER TABLE mock_scores DISABLE ROW LEVEL SECURITY;

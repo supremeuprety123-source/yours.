@@ -33,6 +33,7 @@ const SECTIONS = [
   { key: 'life_notes', label: 'Life Notes' },
   { key: 'exams', label: 'Exam Dates' },
   { key: 'mock_scores', label: 'Mock Scores' },
+  { key: 'day_logs', label: 'Day Logs' },
 ];
 
 export default function Settings() {
