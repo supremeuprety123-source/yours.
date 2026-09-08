@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { getAll, addRecord, updateRecord, removeRecord } from '../lib/store';
-import { doSync, pullFromCloud } from '../lib/sync';
+import { doSync, pullFromCloud, markAllPending } from '../lib/sync';
 import { supabase, supabaseUrl, supabaseKey } from '../lib/supabase';
 import { db } from '../lib/db';
 import type { Profile, Exam, MockScore, CALevel } from '../lib/types';
@@ -460,6 +460,20 @@ export default function Settings() {
           <button onClick={() => forceSync()} disabled={!online} className="w-full rounded-xl border border-[rgba(255,236,200,0.1)] py-2.5 text-sm font-medium text-[#D6CFC4] hover:bg-[#2A261F] disabled:opacity-40">
             Sync Now
           </button>
+          <button
+            onClick={async () => {
+              if (!online) return;
+              await markAllPending();
+              await forceSync();
+            }}
+            disabled={!online}
+            className="w-full rounded-xl border border-[rgba(255,236,200,0.1)] py-2.5 text-sm font-medium text-[#A8A29A] hover:bg-[#2A261F] disabled:opacity-40"
+          >
+            Re-upload all data to cloud
+          </button>
+          <p className="text-[10px] text-[#6B6560]">
+            Use on your main device once so every table (routines, diary, exams, mocks, day logs, finance, life notes) is on Supabase for other devices.
+          </p>
           <button onClick={runDiagnostic} disabled={diagRunning} className="w-full rounded-xl bg-[#2A261F] py-2.5 text-sm font-medium text-[#D6CFC4] hover:bg-zinc-700 disabled:opacity-40">
             {diagRunning ? 'Running...' : 'Run Diagnostic'}
           </button>

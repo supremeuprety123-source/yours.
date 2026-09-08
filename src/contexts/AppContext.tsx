@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
 import { db } from '../lib/db';
-import { pullFromCloud, setSyncCallback, triggerSync, fullSync } from '../lib/sync';
+import { pullFromCloud, setSyncCallback, fullSync } from '../lib/sync';
 import type { Profile } from '../lib/types';
 
 export type PageName = 'home' | 'study' | 'planner' | 'finance' | 'diary' | 'settings';
@@ -110,7 +110,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setLocked(!!p.pin_enabled && typeof p.pin === 'string' && p.pin.length === 4);
   }, []);
 
-  /** Successful PIN unlock — trust this device, unlock, then sync */
+  /** Successful PIN unlock — trust this device, unlock, then full sync everything */
   const unlockAndSync = useCallback(async () => {
     setLocked(false);
     const profiles = await db.profile.toArray();
@@ -119,6 +119,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     if (navigator.onLine) {
       try {
+        // Pull all tables (routines, diary, exams, mocks, day_logs, …) then push pending
         await fullSync();
         await refreshProfile();
         setRefreshKey(k => k + 1);
@@ -159,16 +160,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
         hasInitialized.current = true;
         setLoading(false);
 
-        // 4) Background full sync if we already had local data
+        // 4) Background full sync — pull all tables then push any pending local rows
         if (navigator.onLine && profiles.length > 0) {
           try {
-            await pullFromCloud();
+            await fullSync();
             const again = await db.profile.toArray();
             applyProfileState(again);
             setRefreshKey(k => k + 1);
-            triggerSync();
           } catch (e) {
-            console.error('[app] background pull failed:', e);
+            console.error('[app] background full sync failed:', e);
           }
         }
       } catch (e) {

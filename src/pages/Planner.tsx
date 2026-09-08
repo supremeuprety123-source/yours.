@@ -7,6 +7,8 @@ import {
   DAILY_FIXED_SLOTS,
   DAILY_ROUTINE_TAG,
   DAILY_ROUTINE_MIGRATION_KEY,
+  GYM_WEEKLY_PLAN,
+  GYM_PLAN_TAG,
 } from '../lib/revisionPlan';
 import { todayISO, formatTime, formatDate, addDays, toLocalISO } from '../lib/utils';
 import Modal from '../components/Modal';
@@ -66,9 +68,10 @@ export default function Planner() {
   };
 
   /**
-   * One-time: clear upcoming plan/manual routines (keep past),
-   * remove old daily fixed slots, install Daily – CA Foundation + Gym.
-   * CA chapter plan is NOT auto-seeded (left blank until you Load Plan).
+   * Safe, non-destructive schedule bootstrap (cross-device friendly):
+   * - Never wipe data that already exists (from this device or cloud pull)
+   * - Only install missing daily timetable / gym split
+   * - Remove legacy CA chapter-plan rows if still present
    */
   const applyDailyRoutineMigration = async (): Promise<boolean> => {
     try {
@@ -79,41 +82,71 @@ export default function Planner() {
       /* ignore */
     }
 
-    const today = todayISO();
+    let changed = false;
     const existing = await getAll<Routine>('routines');
 
-    for (const r of existing) {
-      // Keep life milestones
-      if (r.repeat_type === 'life') continue;
-
-      // Keep past one-off / past plan days only
-      if (r.date && r.date < today && (r.repeat_type === 'custom' || r.plan_tag === 'ca-foundation-2026')) {
-        continue;
-      }
-
-      // Everything else is "upcoming" or repeating forward → remove
-      // (daily / weekly / monthly / future custom / future CA plan / old daily tags)
+    // Drop old CA Foundation *chapter plan* only (not the daily timetable)
+    for (const r of existing.filter(x => x.plan_tag === 'ca-foundation-2026')) {
       await removeRecord('routines', r.id);
+      changed = true;
     }
 
-    // Install the new daily timetable
-    for (const slot of DAILY_FIXED_SLOTS) {
-      await addRecord('routines', {
-        title: slot.title,
-        category: slot.category,
-        start_time: slot.start_time,
-        end_time: slot.end_time,
-        linked_subject: '',
-        repeat_type: 'daily',
-        repeat_days: [0, 1, 2, 3, 4, 5, 6],
-        repeat_exceptions: [],
-        repeat_until: null,
-        completed_dates: [],
-        date: null,
-        notes: slot.notes || '',
-        plan_tag: DAILY_ROUTINE_TAG,
-        created_at: new Date().toISOString(),
-      });
+    const afterWipe = await getAll<Routine>('routines');
+    const hasDaily = afterWipe.some(r => r.plan_tag === DAILY_ROUTINE_TAG);
+    const hasGym = afterWipe.some(r => r.plan_tag === GYM_PLAN_TAG);
+
+    // Already fully set up (local or restored from another device)
+    if (hasDaily && hasGym) {
+      try {
+        localStorage.setItem(DAILY_ROUTINE_MIGRATION_KEY, '1');
+      } catch {
+        /* ignore */
+      }
+      return changed;
+    }
+
+    if (!hasDaily) {
+      for (const slot of DAILY_FIXED_SLOTS) {
+        await addRecord('routines', {
+          title: slot.title,
+          category: slot.category,
+          start_time: slot.start_time,
+          end_time: slot.end_time,
+          linked_subject: '',
+          repeat_type: 'daily',
+          repeat_days: slot.repeat_days ?? [0, 1, 2, 3, 4, 5, 6],
+          repeat_exceptions: [],
+          repeat_until: null,
+          completed_dates: [],
+          date: null,
+          notes: slot.notes || '',
+          plan_tag: DAILY_ROUTINE_TAG,
+          created_at: new Date().toISOString(),
+        });
+      }
+      changed = true;
+    }
+
+    if (!hasGym) {
+      for (const g of GYM_WEEKLY_PLAN) {
+        await addRecord('routines', {
+          title: g.title,
+          category: 'Exercise',
+          start_time: '05:20',
+          end_time: '06:15',
+          linked_subject: g.focus,
+          repeat_type: 'weekly',
+          repeat_days: [g.day],
+          repeat_exceptions: [],
+          repeat_until: null,
+          completed_dates: [],
+          date: null,
+          notes: g.notes,
+          plan_tag: GYM_PLAN_TAG,
+          created_at: new Date().toISOString(),
+        });
+      }
+      changed = true;
     }
 
     try {
@@ -121,7 +154,7 @@ export default function Planner() {
     } catch {
       /* ignore */
     }
-    return true;
+    return changed;
   };
 
   // Run migration once on mount, then load
@@ -145,6 +178,8 @@ export default function Planner() {
   const getRoutinesForDate = (date: string) => {
     const dow = new Date(date + 'T00:00').getDay();
     return routines.filter(r => {
+      // Stop after repeat_until (inclusive last day)
+      if (r.repeat_until && date > r.repeat_until) return false;
       if (r.date === date) return true;
       if (r.repeat_type === 'daily') {
         // Check repeat_days if specified (allows excluding specific weekdays)
@@ -248,17 +283,32 @@ export default function Planner() {
     refreshAll();
   };
 
-  const handleDelete = async (mode: 'all' | 'today') => {
+  const handleDelete = async (mode: 'all' | 'today' | 'upcoming') => {
     if (!deleteTarget) return;
+
     if (mode === 'today') {
-      // Add selectedDate to repeat_exceptions so it's skipped on that day only
+      // Skip this date only
       const exceptions = deleteTarget.repeat_exceptions || [];
       if (!exceptions.includes(selectedDate)) {
         await updateRecord('routines', deleteTarget.id, { repeat_exceptions: [...exceptions, selectedDate] });
       }
+    } else if (mode === 'upcoming') {
+      // Keep past; stop from selectedDate forward
+      if (deleteTarget.repeat_type === 'custom' || deleteTarget.repeat_type === 'life') {
+        // One-off: if it's on/after selected day, remove entirely
+        if (!deleteTarget.date || deleteTarget.date >= selectedDate) {
+          await removeRecord('routines', deleteTarget.id);
+        }
+      } else {
+        // Repeating: last active day is the day before selectedDate
+        const lastDay = addDays(selectedDate, -1);
+        await updateRecord('routines', deleteTarget.id, { repeat_until: lastDay });
+      }
     } else {
+      // Delete all
       await removeRecord('routines', deleteTarget.id);
     }
+
     setDeleteTarget(null);
     loadData();
     refreshAll();
@@ -503,9 +553,11 @@ export default function Planner() {
 
       <Modal open={!!deleteTarget} onClose={() => setDeleteTarget(null)} title="Delete Routine" maxWidth="max-w-sm">
         {deleteTarget && (
-          <div className="space-y-4">
-            <p className="text-sm text-[#A8A29A]">Choose how to delete <span className="font-medium text-[#EDE6DA]">"{deleteTarget.title}"</span>:</p>
-            
+          <div className="space-y-3">
+            <p className="text-sm text-[#A8A29A]">
+              Choose how to delete <span className="font-medium text-[#EDE6DA]">"{deleteTarget.title}"</span>:
+            </p>
+
             {deleteTarget.repeat_type !== 'custom' && deleteTarget.repeat_type !== 'life' ? (
               <>
                 <button
@@ -515,9 +567,25 @@ export default function Planner() {
                   <CalendarX size={20} className="text-[#E07A5F] mt-0.5 flex-shrink-0" />
                   <div>
                     <div className="text-sm font-medium text-[#EDE6DA]">Delete for this day only</div>
-                    <div className="text-xs text-[#F7F1E7]0 mt-0.5">Removes "{deleteTarget.title}" from {formatDate(selectedDate)} only. All other days keep the routine.</div>
+                    <div className="text-xs text-[#8A8478] mt-0.5">
+                      Removes it from {formatDate(selectedDate)} only. Other days keep the routine.
+                    </div>
                   </div>
                 </button>
+
+                <button
+                  onClick={() => handleDelete('upcoming')}
+                  className="w-full flex items-start gap-3 rounded-xl border border-[rgba(255,236,200,0.1)] bg-black/25 p-4 hover:border-[#E8B86D]/40 hover:bg-[#E8B86D]/5 transition-colors text-left"
+                >
+                  <Calendar size={20} className="text-[#E8B86D] mt-0.5 flex-shrink-0" />
+                  <div>
+                    <div className="text-sm font-medium text-[#EDE6DA]">Delete upcoming</div>
+                    <div className="text-xs text-[#8A8478] mt-0.5">
+                      Stops from {formatDate(selectedDate)} onward. Past days stay in your history.
+                    </div>
+                  </div>
+                </button>
+
                 <button
                   onClick={() => handleDelete('all')}
                   className="w-full flex items-start gap-3 rounded-xl border border-[rgba(255,236,200,0.1)] bg-black/25 p-4 hover:border-[#E07A5F]/40 hover:bg-[#E07A5F]/5 transition-colors text-left"
@@ -525,24 +593,47 @@ export default function Planner() {
                   <XCircle size={20} className="text-[#E07A5F] mt-0.5 flex-shrink-0" />
                   <div>
                     <div className="text-sm font-medium text-[#EDE6DA]">Delete all occurrences</div>
-                    <div className="text-xs text-[#F7F1E7]0 mt-0.5">Permanently deletes this routine from every day. This cannot be undone.</div>
+                    <div className="text-xs text-[#8A8478] mt-0.5">
+                      Permanently deletes this routine from every day. Cannot be undone.
+                    </div>
                   </div>
                 </button>
               </>
             ) : (
-              <button
-                onClick={() => handleDelete('all')}
-                className="w-full flex items-start gap-3 rounded-xl border border-[#E07A5F]/30 bg-[#E07A5F]/5 p-4 hover:bg-[#E07A5F]/10 transition-colors text-left"
-              >
-                <XCircle size={20} className="text-[#E07A5F] mt-0.5 flex-shrink-0" />
-                <div>
-                  <div className="text-sm font-medium text-[#EDE6DA]">Delete permanently</div>
-                  <div className="text-xs text-[#F7F1E7]0 mt-0.5">This is a one-time routine. It will be permanently deleted.</div>
-                </div>
-              </button>
+              <>
+                {deleteTarget.date && deleteTarget.date >= selectedDate && (
+                  <button
+                    onClick={() => handleDelete('upcoming')}
+                    className="w-full flex items-start gap-3 rounded-xl border border-[rgba(255,236,200,0.1)] bg-black/25 p-4 hover:border-[#E8B86D]/40 hover:bg-[#E8B86D]/5 transition-colors text-left"
+                  >
+                    <Calendar size={20} className="text-[#E8B86D] mt-0.5 flex-shrink-0" />
+                    <div>
+                      <div className="text-sm font-medium text-[#EDE6DA]">Delete upcoming</div>
+                      <div className="text-xs text-[#8A8478] mt-0.5">
+                        Removes this one-time routine (on or after {formatDate(selectedDate)}).
+                      </div>
+                    </div>
+                  </button>
+                )}
+                <button
+                  onClick={() => handleDelete('all')}
+                  className="w-full flex items-start gap-3 rounded-xl border border-[#E07A5F]/30 bg-[#E07A5F]/5 p-4 hover:bg-[#E07A5F]/10 transition-colors text-left"
+                >
+                  <XCircle size={20} className="text-[#E07A5F] mt-0.5 flex-shrink-0" />
+                  <div>
+                    <div className="text-sm font-medium text-[#EDE6DA]">Delete permanently</div>
+                    <div className="text-xs text-[#8A8478] mt-0.5">
+                      This is a one-time routine. It will be permanently deleted.
+                    </div>
+                  </div>
+                </button>
+              </>
             )}
-            
-            <button onClick={() => setDeleteTarget(null)} className="w-full rounded-xl border border-[rgba(255,236,200,0.1)] py-2.5 text-sm font-medium text-[#A8A29A] hover:bg-[#2A261F]">
+
+            <button
+              onClick={() => setDeleteTarget(null)}
+              className="w-full rounded-xl border border-[rgba(255,236,200,0.1)] py-2.5 text-sm font-medium text-[#A8A29A] hover:bg-[#2A261F]"
+            >
               Cancel
             </button>
           </div>

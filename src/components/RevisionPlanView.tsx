@@ -5,7 +5,8 @@ import type { Routine, Chapter, MockScore } from '../lib/types';
 import { todayISO, formatDate, daysUntil } from '../lib/utils';
 import {
   REVISION_PLAN, PLAN_START, PLAN_END, EXAM_DATE, PHASE1_END,
-  DAILY_FIXED_SLOTS, DAILY_ROUTINE_TAG, getPlanDay, type PlanDay
+  DAILY_FIXED_SLOTS, DAILY_ROUTINE_TAG, GYM_WEEKLY_PLAN, GYM_PLAN_TAG,
+  getPlanDay, type PlanDay
 } from '../lib/revisionPlan';
 import Modal from './Modal';
 import {
@@ -105,9 +106,11 @@ export default function RevisionPlanView({ routines, chapters, onRoutinesChanged
         });
       }
 
-      // Refresh daily timetable slots (replace previous daily tags)
+      // Refresh daily timetable + gym split
       for (const r of existing.filter(x =>
-        x.plan_tag === 'ca-daily-fixed' || x.plan_tag === DAILY_ROUTINE_TAG
+        x.plan_tag === 'ca-daily-fixed' ||
+        x.plan_tag === DAILY_ROUTINE_TAG ||
+        x.plan_tag === GYM_PLAN_TAG
       )) {
         await removeRecord('routines', r.id);
       }
@@ -119,7 +122,7 @@ export default function RevisionPlanView({ routines, chapters, onRoutinesChanged
           end_time: slot.end_time,
           linked_subject: '',
           repeat_type: 'daily',
-          repeat_days: [0, 1, 2, 3, 4, 5, 6],
+          repeat_days: slot.repeat_days ?? [0, 1, 2, 3, 4, 5, 6],
           repeat_exceptions: [],
           repeat_until: null,
           completed_dates: [],
@@ -129,8 +132,26 @@ export default function RevisionPlanView({ routines, chapters, onRoutinesChanged
           created_at: new Date().toISOString(),
         });
       }
+      for (const g of GYM_WEEKLY_PLAN) {
+        await addRecord('routines', {
+          title: g.title,
+          category: 'Exercise',
+          start_time: '05:20',
+          end_time: '06:15',
+          linked_subject: g.focus,
+          repeat_type: 'weekly',
+          repeat_days: [g.day],
+          repeat_exceptions: [],
+          repeat_until: null,
+          completed_dates: [],
+          date: null,
+          notes: g.notes,
+          plan_tag: GYM_PLAN_TAG,
+          created_at: new Date().toISOString(),
+        });
+      }
 
-      setSeedMsg(`Loaded ${REVISION_PLAN.length} plan days + daily timetable`);
+      setSeedMsg(`Loaded ${REVISION_PLAN.length} plan days + daily + gym split`);
       onRoutinesChanged();
       refreshAll();
     } catch (e: any) {
