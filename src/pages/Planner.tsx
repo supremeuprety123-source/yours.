@@ -3,6 +3,11 @@ import { useApp } from '../contexts/AppContext';
 import { getAll, addRecord, updateRecord, removeRecord } from '../lib/store';
 import type { Routine, FocusSession, DiaryEntry, Chapter, DayLog } from '../lib/types';
 import RevisionPlanView from '../components/RevisionPlanView';
+import {
+  DAILY_FIXED_SLOTS,
+  DAILY_ROUTINE_TAG,
+  DAILY_ROUTINE_MIGRATION_KEY,
+} from '../lib/revisionPlan';
 import { todayISO, formatTime, formatDate, addDays, toLocalISO } from '../lib/utils';
 import Modal from '../components/Modal';
 import ConfirmDialog from '../components/ConfirmDialog';
@@ -60,7 +65,78 @@ export default function Planner() {
     setLoading(false);
   };
 
-  useEffect(() => { loadData(); }, [refreshKey]);
+  /**
+   * One-time: clear upcoming plan/manual routines (keep past),
+   * remove old daily fixed slots, install Daily – CA Foundation + Gym.
+   * CA chapter plan is NOT auto-seeded (left blank until you Load Plan).
+   */
+  const applyDailyRoutineMigration = async (): Promise<boolean> => {
+    try {
+      if (typeof localStorage !== 'undefined' && localStorage.getItem(DAILY_ROUTINE_MIGRATION_KEY) === '1') {
+        return false;
+      }
+    } catch {
+      /* ignore */
+    }
+
+    const today = todayISO();
+    const existing = await getAll<Routine>('routines');
+
+    for (const r of existing) {
+      // Keep life milestones
+      if (r.repeat_type === 'life') continue;
+
+      // Keep past one-off / past plan days only
+      if (r.date && r.date < today && (r.repeat_type === 'custom' || r.plan_tag === 'ca-foundation-2026')) {
+        continue;
+      }
+
+      // Everything else is "upcoming" or repeating forward → remove
+      // (daily / weekly / monthly / future custom / future CA plan / old daily tags)
+      await removeRecord('routines', r.id);
+    }
+
+    // Install the new daily timetable
+    for (const slot of DAILY_FIXED_SLOTS) {
+      await addRecord('routines', {
+        title: slot.title,
+        category: slot.category,
+        start_time: slot.start_time,
+        end_time: slot.end_time,
+        linked_subject: '',
+        repeat_type: 'daily',
+        repeat_days: [0, 1, 2, 3, 4, 5, 6],
+        repeat_exceptions: [],
+        repeat_until: null,
+        completed_dates: [],
+        date: null,
+        notes: slot.notes || '',
+        plan_tag: DAILY_ROUTINE_TAG,
+        created_at: new Date().toISOString(),
+      });
+    }
+
+    try {
+      localStorage.setItem(DAILY_ROUTINE_MIGRATION_KEY, '1');
+    } catch {
+      /* ignore */
+    }
+    return true;
+  };
+
+  // Run migration once on mount, then load
+  useEffect(() => {
+    (async () => {
+      const changed = await applyDailyRoutineMigration();
+      await loadData();
+      if (changed) refreshAll();
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    loadData();
+  }, [refreshKey]);
 
   if (loading) {
     return <div className="flex items-center justify-center py-20"><div className="h-8 w-8 animate-spin rounded-full border-2 border-[#E8B86D] border-t-transparent" /></div>;

@@ -5,7 +5,7 @@ import type { Routine, Chapter, MockScore } from '../lib/types';
 import { todayISO, formatDate, daysUntil } from '../lib/utils';
 import {
   REVISION_PLAN, PLAN_START, PLAN_END, EXAM_DATE, PHASE1_END,
-  DAILY_FIXED_SLOTS, getPlanDay, type PlanDay
+  DAILY_FIXED_SLOTS, DAILY_ROUTINE_TAG, getPlanDay, type PlanDay
 } from '../lib/revisionPlan';
 import Modal from './Modal';
 import {
@@ -105,30 +105,32 @@ export default function RevisionPlanView({ routines, chapters, onRoutinesChanged
         });
       }
 
-      // Fixed daily slots (only if not already present with same title)
+      // Refresh daily timetable slots (replace previous daily tags)
+      for (const r of existing.filter(x =>
+        x.plan_tag === 'ca-daily-fixed' || x.plan_tag === DAILY_ROUTINE_TAG
+      )) {
+        await removeRecord('routines', r.id);
+      }
       for (const slot of DAILY_FIXED_SLOTS) {
-        const has = existing.some(r => r.title === slot.title && r.repeat_type === 'daily' && r.plan_tag === 'ca-daily-fixed');
-        if (!has) {
-          await addRecord('routines', {
-            title: slot.title,
-            category: slot.category,
-            start_time: slot.start_time,
-            end_time: slot.end_time,
-            linked_subject: '',
-            repeat_type: 'daily',
-            repeat_days: [0, 1, 2, 3, 4, 5, 6],
-            repeat_exceptions: [],
-            repeat_until: PLAN_END,
-            completed_dates: [],
-            date: null,
-            notes: slot.notes,
-            plan_tag: 'ca-daily-fixed',
-            created_at: new Date().toISOString(),
-          });
-        }
+        await addRecord('routines', {
+          title: slot.title,
+          category: slot.category,
+          start_time: slot.start_time,
+          end_time: slot.end_time,
+          linked_subject: '',
+          repeat_type: 'daily',
+          repeat_days: [0, 1, 2, 3, 4, 5, 6],
+          repeat_exceptions: [],
+          repeat_until: null,
+          completed_dates: [],
+          date: null,
+          notes: slot.notes || '',
+          plan_tag: DAILY_ROUTINE_TAG,
+          created_at: new Date().toISOString(),
+        });
       }
 
-      setSeedMsg(`Loaded ${REVISION_PLAN.length} plan days + daily slots`);
+      setSeedMsg(`Loaded ${REVISION_PLAN.length} plan days + daily timetable`);
       onRoutinesChanged();
       refreshAll();
     } catch (e: any) {

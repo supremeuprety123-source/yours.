@@ -91,9 +91,24 @@ export const REVISION_PLAN: PlanDay[] = [
   { date: '2026-10-17', day: 'Fri', paper: 'All Papers', phase: 2, title: 'LAST DAY — ICAI Quick Revision summaries', focus: 'All 4 papers. Sleep by 10:30 PM.' },
 ];
 
+/** Current daily timetable — CA Foundation + Gym (from Sep 2026) */
+export const DAILY_ROUTINE_NAME = 'Daily - CA Foundation + Gym';
+export const DAILY_ROUTINE_TAG = 'daily-ca-gym';
+
 export const DAILY_FIXED_SLOTS = [
-  { title: "Yesterday's topic recall", start_time: '05:00', end_time: '06:00', category: 'Study', notes: 'Write formulas/sections from memory without looking' },
-  { title: 'Consolidation — formulas & definitions', start_time: '21:00', end_time: '23:00', category: 'Study', notes: 'Night block — always present regardless of class timing' },
+  { title: 'Wake', start_time: '04:30', end_time: '04:30', category: 'Personal', notes: 'Start of day' },
+  { title: 'Prep (freshen up, snack, pack bag)', start_time: '04:30', end_time: '04:50', category: 'Personal', notes: '' },
+  { title: 'Running (commute to gym)', start_time: '04:50', end_time: '05:20', category: 'Exercise', notes: '' },
+  { title: 'Gym', start_time: '05:20', end_time: '06:15', category: 'Exercise', notes: '' },
+  { title: 'Commute to coaching', start_time: '06:15', end_time: '06:25', category: 'Travel', notes: '' },
+  { title: 'Coaching + self-study', start_time: '06:30', end_time: '16:00', category: 'Coaching', notes: 'Full coaching day + self-study blocks' },
+  { title: 'Commute home', start_time: '16:00', end_time: '16:30', category: 'Travel', notes: '' },
+  { title: 'Break (shower, food)', start_time: '16:30', end_time: '17:15', category: 'Personal', notes: '' },
+  { title: 'Evening study (revision + practice)', start_time: '17:15', end_time: '19:00', category: 'Study', notes: 'Revision + practice' },
+  { title: 'Dinner', start_time: '19:00', end_time: '20:00', category: 'Meals', notes: '' },
+  { title: 'Light review / next-day prep', start_time: '20:00', end_time: '21:00', category: 'Study', notes: '' },
+  { title: 'Plan tomorrow', start_time: '21:00', end_time: '21:30', category: 'Personal', notes: '' },
+  { title: 'Sleep', start_time: '21:30', end_time: '22:00', category: 'Sleep', notes: 'Wind down / sleep' },
 ];
 
 export function getPlanDay(date: string): PlanDay | undefined {
@@ -114,3 +129,6 @@ export function planProgress(): { total: number; phase1: number; phase2: number;
     mocks: REVISION_PLAN.filter(d => d.isMock).length,
   };
 }
+
+/** localStorage key — bump when daily timetable changes so devices re-apply once */
+export const DAILY_ROUTINE_MIGRATION_KEY = 'yours_daily_routine_v2_ca_gym';
