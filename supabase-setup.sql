@@ -226,3 +226,22 @@ ALTER TABLE day_logs          DISABLE ROW LEVEL SECURITY;
 -- ============================================================
 -- DONE — YOURS cloud schema ready
 -- ============================================================
+
+
+-- 15. PLAN BLOCKS (Study plan day blocks — Planner → Plan)
+CREATE TABLE IF NOT EXISTS plan_blocks (
+  id             text PRIMARY KEY,
+  date           text,
+  start_time     text,
+  end_time       text,
+  title          text,
+  paper          text,
+  target_min     integer,
+  completed_min  integer,
+  status         text,
+  notes          text,
+  created_at     timestamptz,
+  updated_at     timestamptz
+);
+
+ALTER TABLE plan_blocks DISABLE ROW LEVEL SECURITY;

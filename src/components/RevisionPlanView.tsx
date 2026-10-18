@@ -1,509 +1,949 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { getAll, addRecord, updateRecord, removeRecord } from '../lib/store';
-import type { Routine, Chapter, MockScore } from '../lib/types';
-import { todayISO, formatDate, daysUntil } from '../lib/utils';
-import {
-  REVISION_PLAN, PLAN_START, PLAN_END, EXAM_DATE, PHASE1_END,
-  DAILY_FIXED_SLOTS, DAILY_ROUTINE_TAG, GYM_WEEKLY_PLAN, GYM_PLAN_TAG,
-  getPlanDay, type PlanDay
-} from '../lib/revisionPlan';
+import type { Chapter, MockScore, DayLog, FocusSession, PlanBlock, Paper } from '../lib/types';
+import { EXAM_DATE } from '../lib/revisionPlan';
+import { todayISO, formatDate, daysUntil, formatTime, addDays, toLocalISO } from '../lib/utils';
 import Modal from './Modal';
 import {
-  Target, Flame, CheckCircle2, Circle, Plus, Trash2, Edit2, Calendar,
-  BookOpen, Award, ChevronLeft, ChevronRight, Download, AlertTriangle
+  Target, Flame, Plus, Trash2, Edit2, Calendar,
+  Award, ChevronLeft, ChevronRight, BarChart3, Zap,
 } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
+
+type PlanTab = 'overview' | 'planner' | 'habits';
 
 const PAPER_COLORS: Record<string, string> = {
-  'P1 Accounting': '#3B82F6',
-  'P2 Business Laws': '#8B5CF6',
-  'P3 Quant Aptitude': '#E07A5F',
-  'P4 Business Economics': '#8FBC8F',
-  'All Papers': '#E8B86D',
+  Acc: '#3B82F6',
+  Laws: '#A78BFA',
+  QA: '#F97316',
+  Econ: '#22C55E',
 };
 
+function minutesBetween(start: string, end: string): number {
+  if (!start || !end) return 0;
+  const [sh, sm] = start.split(':').map(Number);
+  const [eh, em] = end.split(':').map(Number);
+  let mins = eh * 60 + (em || 0) - (sh * 60 + (sm || 0));
+  if (mins < 0) mins += 24 * 60;
+  return Math.max(0, mins);
+}
+
+function fmtClock(t: string): string {
+  if (!t) return '';
+  const [h, m] = t.split(':').map(Number);
+  const am = h < 12;
+  const h12 = h % 12 || 12;
+  return `${h12}:${String(m).padStart(2, '0')} ${am ? 'am' : 'pm'}`;
+}
+
+function dayPct(blocks: PlanBlock[]): number {
+  const target = blocks.reduce((s, b) => s + (b.target_min || 0), 0);
+  if (target <= 0) return 0;
+  const done = blocks.reduce((s, b) => s + (b.completed_min || 0), 0);
+  return Math.min(100, Math.round((done / target) * 100));
+}
+
 interface Props {
-  routines: Routine[];
+  routines: unknown[];
   chapters: Chapter[];
   onRoutinesChanged: () => void;
 }
 
-export default function RevisionPlanView({ routines, chapters, onRoutinesChanged }: Props) {
-  const { refreshAll } = useApp();
+export default function RevisionPlanView({ chapters, onRoutinesChanged }: Props) {
+  const { refreshAll, refreshKey } = useApp();
+  const [tab, setTab] = useState<PlanTab>('planner');
+  const [blocks, setBlocks] = useState<PlanBlock[]>([]);
   const [mocks, setMocks] = useState<MockScore[]>([]);
-  const [mockModal, setMockModal] = useState(false);
-  const [editingMock, setEditingMock] = useState<MockScore | null>(null);
-  const [seeding, setSeeding] = useState(false);
-  const [seedMsg, setSeedMsg] = useState('');
-  const [filterPhase, setFilterPhase] = useState<'all' | 1 | 2>('all');
+  const [logs, setLogs] = useState<DayLog[]>([]);
+  const [sessions, setSessions] = useState<FocusSession[]>([]);
+  const [papers, setPapers] = useState<Paper[]>([]);
   const [selectedDate, setSelectedDate] = useState(todayISO());
+  const [calMonth, setCalMonth] = useState(() => {
+    const d = new Date();
+    return new Date(d.getFullYear(), d.getMonth(), 1);
+  });
+  const [dayView, setDayView] = useState<'list' | 'clock'>('list');
+  const [blockModal, setBlockModal] = useState(false);
+  const [editing, setEditing] = useState<PlanBlock | null>(null);
+
+  const load = async () => {
+    const [b, m, l, s, p] = await Promise.all([
+      getAll<PlanBlock>('plan_blocks'),
+      getAll<MockScore>('mock_scores'),
+      getAll<DayLog>('day_logs'),
+      getAll<FocusSession>('focus_sessions'),
+      getAll<Paper>('papers'),
+    ]);
+    setBlocks(b);
+    setMocks(m.sort((a, c) => c.date.localeCompare(a.date)));
+    setLogs(l);
+    setSessions(s);
+    setPapers(p);
+  };
 
   useEffect(() => {
-    getAll<MockScore>('mock_scores').then(m => setMocks(m.sort((a, b) => b.date.localeCompare(a.date))));
-  }, [routines]);
+    load();
+  }, [refreshKey]);
 
   const today = todayISO();
-  const todayPlan = getPlanDay(today);
-  const daysLeft = daysUntil(PLAN_END);
-  const examDays = daysUntil(EXAM_DATE);
+  const examDays = EXAM_DATE ? Math.max(0, daysUntil(EXAM_DATE)) : 0;
 
-  const planRoutines = useMemo(
-    () => routines.filter(r => r.plan_tag === 'ca-foundation-2026'),
-    [routines]
+  const blocksForDate = useMemo(
+    () =>
+      blocks
+        .filter(b => b.date === selectedDate)
+        .sort((a, b) => (a.start_time || '').localeCompare(b.start_time || '')),
+    [blocks, selectedDate]
   );
-  const seeded = planRoutines.length > 0;
 
-  const completedPlanDays = useMemo(() => {
-    const set = new Set<string>();
-    for (const r of planRoutines) {
-      if (r.date && r.completed_dates?.includes(r.date)) set.add(r.date);
+  const blocksByDate = useMemo(() => {
+    const map: Record<string, PlanBlock[]> = {};
+    for (const b of blocks) {
+      (map[b.date] ||= []).push(b);
     }
-    return set;
-  }, [planRoutines]);
+    return map;
+  }, [blocks]);
 
-  const filteredPlan = useMemo(() => {
-    if (filterPhase === 'all') return REVISION_PLAN;
-    return REVISION_PLAN.filter(d => d.phase === filterPhase);
-  }, [filterPhase]);
+  const todayBlocks = blocksByDate[today] || [];
+  const todayTarget = todayBlocks.reduce((s, b) => s + (b.target_min || 0), 0);
+  const todayDone = todayBlocks.reduce((s, b) => s + (b.completed_min || 0), 0);
 
-  const confStats = useMemo(() => {
-    const red = chapters.filter(c => c.confidence === 'red').length;
-    const yellow = chapters.filter(c => c.confidence === 'yellow').length;
-    const green = chapters.filter(c => c.confidence === 'green').length;
-    const p1 = chapters.filter(c => c.phase1_done).length;
-    const p2 = chapters.filter(c => c.phase2_done).length;
-    const ready = chapters.filter(c => c.phase1_done && c.phase2_done && c.confidence === 'green').length;
-    return { red, yellow, green, p1, p2, ready, total: chapters.length };
-  }, [chapters]);
+  const studiedTodayMin = useMemo(() => {
+    const fromLogs = logs
+      .filter(l => l.date === today && (l.category === 'Study' || l.category === 'Coaching'))
+      .reduce((s, l) => s + (l.duration_min || 0), 0);
+    const fromFocus = sessions
+      .filter(s => s.completed_at.startsWith(today))
+      .reduce((s, sess) => s + sess.duration, 0);
+    return fromLogs + fromFocus + todayDone;
+  }, [logs, sessions, today, todayDone]);
 
-  const seedPlan = async () => {
-    setSeeding(true);
-    setSeedMsg('');
-    try {
-      // Remove previous plan-tagged routines only
-      const existing = await getAll<Routine>('routines');
-      for (const r of existing.filter(x => x.plan_tag === 'ca-foundation-2026')) {
-        await removeRecord('routines', r.id);
-      }
-
-      // One custom routine per plan day
-      for (const day of REVISION_PLAN) {
-        await addRecord('routines', {
-          title: day.title,
-          category: 'Study',
-          start_time: '13:00',
-          end_time: '16:00',
-          linked_subject: day.paper,
-          repeat_type: 'custom',
-          repeat_days: [],
-          repeat_exceptions: [],
-          repeat_until: null,
-          completed_dates: [],
-          date: day.date,
-          notes: day.focus,
-          plan_tag: 'ca-foundation-2026',
-          created_at: new Date().toISOString(),
-        });
-      }
-
-      // Refresh daily timetable + gym split
-      for (const r of existing.filter(x =>
-        x.plan_tag === 'ca-daily-fixed' ||
-        x.plan_tag === DAILY_ROUTINE_TAG ||
-        x.plan_tag === GYM_PLAN_TAG
-      )) {
-        await removeRecord('routines', r.id);
-      }
-      for (const slot of DAILY_FIXED_SLOTS) {
-        await addRecord('routines', {
-          title: slot.title,
-          category: slot.category,
-          start_time: slot.start_time,
-          end_time: slot.end_time,
-          linked_subject: '',
-          repeat_type: 'daily',
-          repeat_days: slot.repeat_days ?? [0, 1, 2, 3, 4, 5, 6],
-          repeat_exceptions: [],
-          repeat_until: null,
-          completed_dates: [],
-          date: null,
-          notes: slot.notes || '',
-          plan_tag: DAILY_ROUTINE_TAG,
-          created_at: new Date().toISOString(),
-        });
-      }
-      for (const g of GYM_WEEKLY_PLAN) {
-        await addRecord('routines', {
-          title: g.title,
-          category: 'Exercise',
-          start_time: '05:20',
-          end_time: '06:15',
-          linked_subject: g.focus,
-          repeat_type: 'weekly',
-          repeat_days: [g.day],
-          repeat_exceptions: [],
-          repeat_until: null,
-          completed_dates: [],
-          date: null,
-          notes: g.notes,
-          plan_tag: GYM_PLAN_TAG,
-          created_at: new Date().toISOString(),
-        });
-      }
-
-      setSeedMsg(`Loaded ${REVISION_PLAN.length} plan days + daily + gym split`);
-      onRoutinesChanged();
-      refreshAll();
-    } catch (e: any) {
-      setSeedMsg('Error: ' + (e?.message || 'failed'));
-    } finally {
-      setSeeding(false);
+  const streak = useMemo(() => {
+    let n = 0;
+    for (let i = 0; i < 365; i++) {
+      const d = addDays(today, -i);
+      const has =
+        (blocksByDate[d] || []).some(b => (b.completed_min || 0) > 0) ||
+        logs.some(l => l.date === d && (l.duration_min || 0) > 0) ||
+        sessions.some(s => s.completed_at.startsWith(d));
+      if (has) n++;
+      else if (i > 0) break;
     }
-  };
+    return n;
+  }, [blocksByDate, logs, sessions, today]);
 
-  const toggleDayDone = async (date: string) => {
-    const r = planRoutines.find(x => x.date === date);
-    if (!r) return;
-    const dates = r.completed_dates || [];
-    const next = dates.includes(date) ? dates.filter(d => d !== date) : [...dates, date];
-    await updateRecord('routines', r.id, { completed_dates: next });
-    onRoutinesChanged();
+  const studyNext = useMemo(() => {
+    return [...chapters]
+      .filter(c => c.status !== 'completed' || (c.completion || 0) < 100)
+      .sort((a, b) => (a.completion || 0) - (b.completion || 0))
+      .slice(0, 5)
+      .map(c => {
+        const paper = papers.find(p => p.id === c.paper_id);
+        const short =
+          paper?.name?.includes('Law') ? 'Laws' :
+          paper?.name?.includes('Account') ? 'Acc' :
+          paper?.name?.includes('Quant') || paper?.name?.includes('Math') ? 'QA' :
+          paper?.name?.includes('Eco') ? 'Econ' : 'Acc';
+        return {
+          id: c.id,
+          title: c.name,
+          paper: short,
+          solvedHint: `${c.completion || 0}% · ${c.status === 'not_started' ? 'Not started' : c.status === 'in_progress' ? 'In progress' : 'Done'}`,
+          status: c.status,
+        };
+      });
+  }, [chapters, papers]);
+
+  const setBlockStatus = async (b: PlanBlock, status: 'full' | 'half' | 'none') => {
+    const completed =
+      status === 'full' ? b.target_min || minutesBetween(b.start_time, b.end_time) :
+      status === 'half' ? Math.round((b.target_min || minutesBetween(b.start_time, b.end_time)) / 2) :
+      0;
+    await updateRecord('plan_blocks', b.id, { status, completed_min: completed });
+    await load();
     refreshAll();
+    onRoutinesChanged();
   };
 
-  const saveMock = async (data: Partial<MockScore>) => {
+  const saveBlock = async (data: Partial<PlanBlock>) => {
+    const start = data.start_time || '09:00';
+    const end = data.end_time || '10:00';
+    const target = data.target_min ?? minutesBetween(start, end);
     const payload = {
-      date: data.date || today,
-      paper: data.paper || '',
-      score: data.score ?? 0,
-      max_score: data.max_score ?? 100,
-      confident_attempts: data.confident_attempts ?? 0,
-      guessed_attempts: data.guessed_attempts ?? 0,
-      wrong_guesses: data.wrong_guesses ?? 0,
+      date: data.date || selectedDate,
+      start_time: start,
+      end_time: end,
+      title: (data.title || '').trim() || 'Study block',
+      paper: data.paper || 'Acc',
+      target_min: target,
+      completed_min: data.completed_min ?? 0,
+      status: data.status || '',
       notes: data.notes || '',
     };
-    if (editingMock) {
-      await updateRecord('mock_scores', editingMock.id, payload);
-    } else {
-      await addRecord('mock_scores', { ...payload, created_at: new Date().toISOString() });
-    }
-    const m = await getAll<MockScore>('mock_scores');
-    setMocks(m.sort((a, b) => b.date.localeCompare(a.date)));
-    setMockModal(false);
-    setEditingMock(null);
+    if (editing) await updateRecord('plan_blocks', editing.id, payload);
+    else await addRecord('plan_blocks', { ...payload, created_at: new Date().toISOString() });
+    setBlockModal(false);
+    setEditing(null);
+    await load();
     refreshAll();
   };
 
-  const deleteMock = async (id: string) => {
-    await removeRecord('mock_scores', id);
-    setMocks(prev => prev.filter(m => m.id !== id));
+  const deleteBlock = async (id: string) => {
+    await removeRecord('plan_blocks', id);
+    await load();
     refreshAll();
   };
+
+  const calCells = useMemo(() => {
+    const y = calMonth.getFullYear();
+    const m = calMonth.getMonth();
+    const firstDow = new Date(y, m, 1).getDay();
+    const monFirst = (firstDow + 6) % 7;
+    const daysInMonth = new Date(y, m + 1, 0).getDate();
+    const cells: { dateStr: string; day: number; inMonth: boolean }[] = [];
+    for (let i = 0; i < monFirst; i++) {
+      const d = new Date(y, m, 1 - (monFirst - i));
+      cells.push({ dateStr: toLocalISO(d), day: d.getDate(), inMonth: false });
+    }
+    for (let d = 1; d <= daysInMonth; d++) {
+      cells.push({ dateStr: toLocalISO(new Date(y, m, d)), day: d, inMonth: true });
+    }
+    while (cells.length % 7 !== 0) {
+      const last = cells[cells.length - 1];
+      const [yy, mm, dd] = last.dateStr.split('-').map(Number);
+      const n = new Date(yy, mm - 1, dd + 1);
+      cells.push({ dateStr: toLocalISO(n), day: n.getDate(), inMonth: false });
+    }
+    return cells;
+  }, [calMonth]);
+
+  const greenDays = useMemo(() => {
+    return Object.entries(blocksByDate).filter(([, bs]) => dayPct(bs) >= 90).length;
+  }, [blocksByDate]);
 
   return (
-    <div className="space-y-4">
-      {/* Header stats */}
-      <div className="y-panel p-4">
-        <div className="flex items-start justify-between gap-3 flex-wrap">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <Target size={18} className="text-[#E8B86D]" />
-              <h2 className="text-base font-bold text-[#F5F0E8]">CA Foundation Plan</h2>
-            </div>
-            <p className="text-xs text-[#F7F1E7]0">
-              Aug 25 → Oct 17 · Target AIR 1 · Exam {formatDate(EXAM_DATE)}
-            </p>
-          </div>
-          <div className="flex gap-2 text-center">
-            <div className="rounded-xl bg-zinc-900/60 px-3 py-2 min-w-[64px]">
-              <div className="text-lg font-bold text-[#E8B86D]">{Math.max(0, daysLeft)}</div>
-              <div className="text-[9px] text-[#F7F1E7]0">days left</div>
-            </div>
-            <div className="rounded-xl bg-zinc-900/60 px-3 py-2 min-w-[64px]">
-              <div className="text-lg font-bold text-[#E07A5F]">{Math.max(0, examDays)}</div>
-              <div className="text-[9px] text-[#F7F1E7]0">to exam</div>
-            </div>
-          </div>
+    <div className="sc-plan space-y-5">
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+        <div>
+          <h2 className="text-2xl font-bold text-[#F8FAFC] tracking-tight">Your plan</h2>
+          <p className="text-sm text-[#94A3B8] mt-0.5">4 subjects · CA Foundation · Jan 2027</p>
         </div>
-
-        {/* Progress bars */}
-        <div className="mt-4 grid grid-cols-2 gap-3">
-          <div>
-            <div className="flex justify-between text-[10px] mb-1">
-              <span className="text-[#F7F1E7]0">Phase 1 days</span>
-              <span className="text-[#A8A29A]">{[...completedPlanDays].filter(d => d <= PHASE1_END).length}/{REVISION_PLAN.filter(d => d.phase === 1).length}</span>
-            </div>
-            <div className="h-1.5 rounded-full bg-[#2A261F] overflow-hidden">
-              <div className="h-full bg-[#E8B86D] rounded-full" style={{
-                width: `${(100 * [...completedPlanDays].filter(d => d <= PHASE1_END).length) / Math.max(1, REVISION_PLAN.filter(d => d.phase === 1).length)}%`
-              }} />
-            </div>
-          </div>
-          <div>
-            <div className="flex justify-between text-[10px] mb-1">
-              <span className="text-[#F7F1E7]0">Phase 2 days</span>
-              <span className="text-[#A8A29A]">{[...completedPlanDays].filter(d => d > PHASE1_END).length}/{REVISION_PLAN.filter(d => d.phase === 2).length}</span>
-            </div>
-            <div className="h-1.5 rounded-full bg-[#2A261F] overflow-hidden">
-              <div className="h-full bg-[#8FBC8F] rounded-full" style={{
-                width: `${(100 * [...completedPlanDays].filter(d => d > PHASE1_END).length) / Math.max(1, REVISION_PLAN.filter(d => d.phase === 2).length)}%`
-              }} />
-            </div>
-          </div>
-        </div>
-
-        {/* Confidence summary from Study chapters */}
-        {chapters.length > 0 && (
-          <div className="mt-3 flex flex-wrap gap-2 text-[10px]">
-            <span className="rounded-full bg-[#E07A5F]/15 text-[#E07A5F] px-2 py-0.5">🔴 {confStats.red}</span>
-            <span className="rounded-full bg-[#E07A5F]/15 text-[#E07A5F] px-2 py-0.5">🟡 {confStats.yellow}</span>
-            <span className="rounded-full bg-[#8FBC8F]/15 text-[#8FBC8F] px-2 py-0.5">🟢 {confStats.green}</span>
-            <span className="rounded-full bg-[#2A261F] text-[#A8A29A] px-2 py-0.5">P1 {confStats.p1}/{confStats.total}</span>
-            <span className="rounded-full bg-[#2A261F] text-[#A8A29A] px-2 py-0.5">P2 {confStats.p2}/{confStats.total}</span>
-            <span className="rounded-full bg-[#8FBC8F]/15 text-[#8FBC8F] px-2 py-0.5">Ready {confStats.ready}</span>
-          </div>
-        )}
-
-        <button
-          onClick={seedPlan}
-          disabled={seeding}
-          className="y-btn y-btn-primary mt-4 w-full disabled:opacity-50"
-        >
-          <Download size={16} />
-          {seeding ? 'Loading…' : seeded ? 'Reload Plan into Calendar' : 'Load Plan into Calendar'}
-        </button>
-        {seedMsg && <p className="mt-2 text-xs text-center text-[#A8A29A]">{seedMsg}</p>}
-        <p className="mt-1.5 text-[10px] text-[#6B6560] text-center">
-          Only adds/updates plan-tagged routines. Your other routines stay untouched.
-        </p>
-      </div>
-
-      {/* Today's focus */}
-      {todayPlan && (
-        <div className="rounded-2xl border border-[#E8B86D]/30 bg-[#E8B86D]/5 p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <Flame size={16} className="text-[#E8B86D]" />
-            <span className="text-xs font-semibold text-[#E8B86D]">Today · {todayPlan.day}</span>
-            <span className="ml-auto text-[10px] rounded-md px-2 py-0.5" style={{
-              background: (PAPER_COLORS[todayPlan.paper] || '#71717a') + '25',
-              color: PAPER_COLORS[todayPlan.paper] || '#71717a',
-            }}>{todayPlan.paper}</span>
-          </div>
-          <h3 className="text-sm font-semibold text-[#F5F0E8]">{todayPlan.title}</h3>
-          <p className="text-xs text-[#A8A29A] mt-1">{todayPlan.focus}</p>
-          {todayPlan.isMock && (
-            <div className="mt-2 flex items-center gap-1.5 text-xs text-[#E07A5F]">
-              <AlertTriangle size={12} /> Timed mock day
-            </div>
-          )}
-          <button
-            onClick={() => toggleDayDone(today)}
-            className={`mt-3 w-full flex items-center justify-center gap-2 rounded-xl border py-2 text-sm font-medium ${
-              completedPlanDays.has(today)
-                ? 'border-[#8FBC8F] bg-[#8FBC8F]/10 text-[#8FBC8F]'
-                : 'border-[rgba(255,236,200,0.1)] text-[#D6CFC4] hover:border-[#E8B86D]'
-            }`}
-          >
-            {completedPlanDays.has(today) ? <><CheckCircle2 size={16} /> Done for today</> : <><Circle size={16} /> Mark day complete</>}
-          </button>
-        </div>
-      )}
-
-      {/* Phase filter */}
-      <div className="flex gap-1 rounded-xl border border-[rgba(255,236,200,0.07)] bg-[#1E1B16]/90 p-1 w-fit">
-        {(['all', 1, 2] as const).map(p => (
-          <button
-            key={String(p)}
-            onClick={() => setFilterPhase(p)}
-            className={`rounded-lg px-3 py-1.5 text-xs font-medium capitalize ${
-              filterPhase === p ? 'bg-[#E8B86D] text-black' : 'text-[#A8A29A]'
-            }`}
-          >
-            {p === 'all' ? 'All days' : `Phase ${p}`}
-          </button>
-        ))}
-      </div>
-
-      {/* Day list */}
-      <div className="space-y-1.5 max-h-[420px] overflow-y-auto pr-1">
-        {filteredPlan.map(day => {
-          const done = completedPlanDays.has(day.date);
-          const isToday = day.date === today;
-          const color = PAPER_COLORS[day.paper] || '#71717a';
-          return (
+        <div className="flex gap-1 rounded-xl bg-[#1E293B] border border-white/10 p-1 w-fit">
+          {([
+            ['overview', 'Overview'],
+            ['planner', 'Planner'],
+            ['habits', 'Habits'],
+          ] as [PlanTab, string][]).map(([k, label]) => (
             <button
-              key={day.date}
-              onClick={() => toggleDayDone(day.date)}
-              className={`w-full text-left flex items-start gap-3 rounded-xl border px-3 py-2.5 transition-all ${
-                isToday
-                  ? 'border-[#E8B86D]/40 bg-[#E8B86D]/5'
-                  : done
-                  ? 'border-[#8FBC8F]/20 bg-[#8FBC8F]/5'
-                  : 'border-[rgba(255,236,200,0.07)] bg-black/20'
+              key={k}
+              onClick={() => setTab(k)}
+              className={`rounded-lg px-3.5 py-1.5 text-sm font-medium transition-colors ${
+                tab === k ? 'bg-[#3B82F6] text-white' : 'text-[#94A3B8] hover:text-white'
               }`}
             >
-              <div className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 ${
-                done ? 'border-[#8FBC8F] bg-[#8FBC8F]' : 'border-[#4A453C]'
-              }`}>
-                {done && <CheckCircle2 size={12} className="text-black" />}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-[10px] text-[#F7F1E7]0 font-medium">{day.date.slice(5)} · {day.day}</span>
-                  <span className="text-[9px] rounded px-1.5 py-0.5 font-medium" style={{ background: color + '20', color }}>{day.paper}</span>
-                  {day.isMock && <span className="text-[9px] rounded bg-[#E07A5F]/15 text-[#E07A5F] px-1.5 py-0.5">MOCK</span>}
-                  <span className="text-[9px] text-[#6B6560]">P{day.phase}</span>
-                </div>
-                <div className={`text-sm font-medium mt-0.5 ${done ? 'text-[#F7F1E7]0 line-through' : 'text-[#EDE6DA]'}`}>{day.title}</div>
-                <div className="text-[11px] text-[#F7F1E7]0 mt-0.5 line-clamp-2">{day.focus}</div>
-              </div>
+              {label}
             </button>
-          );
-        })}
-      </div>
-
-      {/* Mock scores */}
-      <div className="y-panel p-4">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <Award size={16} className="text-[#E8B86D]" />
-            <h3 className="text-sm font-semibold text-[#D6CFC4]">Mock Score Log</h3>
-          </div>
-          <button
-            onClick={() => { setEditingMock(null); setMockModal(true); }}
-            className="flex items-center gap-1 text-xs text-[#E8B86D] hover:underline"
-          >
-            <Plus size={14} /> Log mock
-          </button>
+          ))}
         </div>
-        {mocks.length === 0 ? (
-          <p className="text-xs text-[#6B6560] py-2">No mocks logged yet. After each timed mock, record score + confident vs guessed attempts.</p>
-        ) : (
-          <div className="space-y-2">
-            {mocks.map(m => {
-              const negCost = (m.wrong_guesses || 0) * 0.25;
-              return (
-                <div key={m.id} className="rounded-xl border border-[rgba(255,236,200,0.07)] bg-black/25 px-3 py-2.5">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <div className="text-sm font-medium text-[#EDE6DA]">{m.paper}</div>
-                      <div className="text-[10px] text-[#F7F1E7]0">{formatDate(m.date)}</div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-lg font-bold text-[#E8B86D]">{m.score}<span className="text-xs text-[#8A8478]">/{m.max_score}</span></div>
-                      <div className="flex items-center justify-end gap-2 mt-0.5">
-                        <button onClick={() => { setEditingMock(m); setMockModal(true); }} className="text-[#8A8478] hover:text-[#D6CFC4]"><Edit2 size={12} /></button>
-                        <button onClick={() => deleteMock(m.id)} className="text-[#6B6560] hover:text-[#E07A5F]"><Trash2 size={12} /></button>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="mt-1.5 flex flex-wrap gap-2 text-[10px] text-[#F7F1E7]0">
-                    <span>Confident: {m.confident_attempts}</span>
-                    <span>Guessed: {m.guessed_attempts}</span>
-                    <span>Wrong guesses: {m.wrong_guesses}</span>
-                    {m.wrong_guesses > 0 && <span className="text-[#E07A5F]">−{negCost} marks risk</span>}
-                  </div>
-                  {m.notes && <p className="mt-1 text-[11px] text-[#A8A29A]">{m.notes}</p>}
-                </div>
-              );
-            })}
-          </div>
-        )}
       </div>
 
-      {mockModal && (
-        <MockScoreModal
-          open={mockModal}
-          editing={editingMock}
-          onClose={() => { setMockModal(false); setEditingMock(null); }}
-          onSave={saveMock}
+      {tab === 'overview' && (
+        <OverviewTab
+          studiedMin={studiedTodayMin}
+          streak={streak}
+          examDays={examDays}
+          studyNext={studyNext}
+          chapters={chapters}
+          papers={papers}
+          mocks={mocks}
+          onOpenPlanner={() => setTab('planner')}
+        />
+      )}
+
+      {tab === 'planner' && (
+        <PlannerTab
+          calMonth={calMonth}
+          setCalMonth={setCalMonth}
+          calCells={calCells}
+          selectedDate={selectedDate}
+          setSelectedDate={setSelectedDate}
+          blocksByDate={blocksByDate}
+          blocksForDate={blocksForDate}
+          dayView={dayView}
+          setDayView={setDayView}
+          todayPct={dayPct(blocksForDate)}
+          todayTarget={blocksForDate.reduce((s, b) => s + (b.target_min || 0), 0)}
+          todayDone={blocksForDate.reduce((s, b) => s + (b.completed_min || 0), 0)}
+          greenDays={greenDays}
+          examDays={examDays}
+          onAdd={() => { setEditing(null); setBlockModal(true); }}
+          onEdit={b => { setEditing(b); setBlockModal(true); }}
+          onDelete={deleteBlock}
+          onStatus={setBlockStatus}
+        />
+      )}
+
+      {tab === 'habits' && (
+        <HabitsTab
+          calMonth={calMonth}
+          setCalMonth={setCalMonth}
+          calCells={calCells}
+          selectedDate={selectedDate}
+          setSelectedDate={setSelectedDate}
+          blocksByDate={blocksByDate}
+          logs={logs}
+          sessions={sessions}
+          mocks={mocks}
+          streak={streak}
+          studiedTodayMin={studiedTodayMin}
+        />
+      )}
+
+      {blockModal && (
+        <BlockModal
+          open={blockModal}
+          editing={editing}
+          defaultDate={selectedDate}
+          onClose={() => { setBlockModal(false); setEditing(null); }}
+          onSave={saveBlock}
         />
       )}
     </div>
   );
 }
 
-function MockScoreModal({ open, editing, onClose, onSave }: {
-  open: boolean;
-  editing: MockScore | null;
-  onClose: () => void;
-  onSave: (d: Partial<MockScore>) => void;
+function OverviewTab({
+  studiedMin, streak, examDays, studyNext, chapters, papers, mocks, onOpenPlanner,
+}: {
+  studiedMin: number;
+  streak: number;
+  examDays: number;
+  studyNext: { id: string; title: string; paper: string; solvedHint: string; status: string }[];
+  chapters: Chapter[];
+  papers: Paper[];
+  mocks: MockScore[];
+  onOpenPlanner: () => void;
 }) {
-  const [date, setDate] = useState(todayISO());
-  const [paper, setPaper] = useState('Paper 1 Accounting');
-  const [score, setScore] = useState(0);
-  const [maxScore, setMaxScore] = useState(100);
-  const [confident, setConfident] = useState(0);
-  const [guessed, setGuessed] = useState(0);
-  const [wrong, setWrong] = useState(0);
+  const byPaper = useMemo(() => {
+    const map: Record<string, { total: number; done: number }> = {};
+    for (const c of chapters) {
+      const paper = papers.find(p => p.id === c.paper_id);
+      const key =
+        paper?.name?.includes('Law') ? 'Laws' :
+        paper?.name?.includes('Account') ? 'Acc' :
+        paper?.name?.includes('Quant') || paper?.name?.includes('Math') ? 'QA' :
+        paper?.name?.includes('Eco') ? 'Econ' : (paper?.name || 'Other');
+      if (!map[key]) map[key] = { total: 0, done: 0 };
+      map[key].total++;
+      if (c.status === 'completed' || (c.completion || 0) >= 100) map[key].done++;
+    }
+    return map;
+  }, [chapters, papers]);
+
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {[
+          { label: 'Solved today', value: '0', sub: 'questions', hint: 'Keep going' },
+          { label: 'Studied today', value: formatTime(studiedMin), sub: 'active time', hint: 'Logs + focus + plan' },
+          { label: 'Streak', value: String(streak), sub: streak === 1 ? 'day' : 'days', hint: streak > 0 ? 'Your best yet' : 'Start today' },
+          { label: 'Revisions due', value: String(chapters.filter(c => c.confidence === 'red' || c.confidence === 'yellow').length), sub: 'today', hint: 'Mark in Study' },
+        ].map(s => (
+          <div key={s.label} className="rounded-2xl border border-white/10 bg-[#1E293B] p-4">
+            <div className="text-sm text-[#94A3B8]">{s.label}</div>
+            <div className="text-3xl font-bold text-[#F8FAFC] mt-1">{s.value}</div>
+            <div className="text-xs text-[#64748B] mt-0.5">{s.sub}</div>
+            <div className="text-xs text-[#94A3B8] mt-2">{s.hint}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid lg:grid-cols-2 gap-4">
+        <div className="rounded-2xl border border-white/10 bg-[#1E293B] p-5">
+          <h3 className="text-lg font-semibold text-[#F8FAFC]">What to study next</h3>
+          <p className="text-xs text-[#64748B] mt-0.5 mb-3">From your Study chapters.</p>
+          {studyNext.length === 0 ? (
+            <p className="text-sm text-[#64748B] py-6 text-center">No chapters yet — add them in Study.</p>
+          ) : (
+            <div className="space-y-1">
+              {studyNext.map((item, i) => (
+                <div key={item.id} className="flex items-center justify-between gap-3 rounded-xl p-3 hover:bg-white/5">
+                  <div className="flex gap-3 min-w-0">
+                    <span className="text-xs text-[#64748B] w-4 shrink-0 pt-1">{i + 1}</span>
+                    <span
+                      className="shrink-0 self-start rounded-full px-2.5 py-0.5 text-xs font-medium"
+                      style={{
+                        background: (PAPER_COLORS[item.paper] || '#3B82F6') + '22',
+                        color: PAPER_COLORS[item.paper] || '#3B82F6',
+                      }}
+                    >
+                      {item.paper}
+                    </span>
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium text-[#F8FAFC] truncate">{item.title}</div>
+                      <div className="text-xs text-[#94A3B8] mt-0.5">{item.solvedHint}</div>
+                      <span className="inline-block mt-1 rounded-full bg-[#F97316]/15 text-[#F97316] px-2 py-0.5 text-[10px] font-medium">
+                        {item.status === 'not_started' ? 'Not started' : item.status.replace('_', ' ')}
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={onOpenPlanner}
+                    className="shrink-0 rounded-xl bg-[#3B82F6] hover:bg-[#2563EB] px-3 py-1.5 text-xs font-medium text-white"
+                  >
+                    Start
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-2xl border border-white/10 bg-[#1E293B] p-5 flex flex-col">
+          <h3 className="text-lg font-semibold text-[#F8FAFC]">Exam pace</h3>
+          <div className="text-3xl font-bold text-[#F8FAFC] mt-3">Exam in {examDays} days.</div>
+          <p className="text-sm text-[#94A3B8] mt-2 flex-1">
+            {EXAM_DATE ? `Target exam ${formatDate(EXAM_DATE)}. Plan daily blocks and mark completion to stay on pace.` : 'Set an official exam date in Settings.'}
+          </p>
+          <button
+            onClick={onOpenPlanner}
+            className="mt-4 w-full rounded-xl bg-[#3B82F6] hover:bg-[#2563EB] py-2.5 text-sm font-medium text-white"
+          >
+            Open my plan
+          </button>
+        </div>
+      </div>
+
+      <div className="grid lg:grid-cols-2 gap-4">
+        <div className="rounded-2xl border border-white/10 bg-[#1E293B] p-5">
+          <h3 className="text-lg font-semibold text-[#F8FAFC] mb-3">Readiness by subject</h3>
+          {Object.keys(byPaper).length === 0 ? (
+            <p className="text-sm text-[#64748B]">Add chapters in Study to unlock readiness.</p>
+          ) : (
+            <div className="space-y-3">
+              {Object.entries(byPaper).map(([name, v]) => {
+                const pct = v.total ? Math.round((v.done / v.total) * 100) : 0;
+                return (
+                  <div key={name}>
+                    <div className="flex justify-between text-sm mb-1">
+                      <span className="text-[#F8FAFC] font-medium">{name}</span>
+                      <span className="text-[#94A3B8]">{v.done}/{v.total} chapters</span>
+                    </div>
+                    <div className="h-2 rounded-full bg-[#334155] overflow-hidden">
+                      <div className="h-full rounded-full bg-[#3B82F6] transition-all" style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-2xl border border-white/10 bg-[#1E293B] p-5">
+          <h3 className="text-lg font-semibold text-[#F8FAFC] mb-1">Syllabus coverage</h3>
+          <p className="text-xs text-[#64748B] mb-4">Chapters completed · mocks logged</p>
+          <div className="space-y-4">
+            <div>
+              <div className="flex justify-between text-sm mb-1">
+                <span className="text-[#94A3B8]">Chapters done</span>
+                <span className="text-[#F8FAFC]">{chapters.filter(c => c.status === 'completed').length}/{chapters.length || 0}</span>
+              </div>
+              <div className="h-2 rounded-full bg-[#334155] overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-[#22C55E]"
+                  style={{ width: `${chapters.length ? (100 * chapters.filter(c => c.status === 'completed').length) / chapters.length : 0}%` }}
+                />
+              </div>
+            </div>
+            <div>
+              <div className="flex justify-between text-sm mb-1">
+                <span className="text-[#94A3B8]">Mocks logged</span>
+                <span className="text-[#F8FAFC]">{mocks.length}</span>
+              </div>
+              <div className="h-2 rounded-full bg-[#334155] overflow-hidden">
+                <div className="h-full rounded-full bg-[#3B82F6]" style={{ width: `${Math.min(100, mocks.length * 10)}%` }} />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PlannerTab({
+  calMonth, setCalMonth, calCells, selectedDate, setSelectedDate, blocksByDate, blocksForDate,
+  dayView, setDayView, todayPct, todayTarget, todayDone, greenDays, examDays,
+  onAdd, onEdit, onDelete, onStatus,
+}: {
+  calMonth: Date;
+  setCalMonth: (d: Date) => void;
+  calCells: { dateStr: string; day: number; inMonth: boolean }[];
+  selectedDate: string;
+  setSelectedDate: (d: string) => void;
+  blocksByDate: Record<string, PlanBlock[]>;
+  blocksForDate: PlanBlock[];
+  dayView: 'list' | 'clock';
+  setDayView: (v: 'list' | 'clock') => void;
+  todayPct: number;
+  todayTarget: number;
+  todayDone: number;
+  greenDays: number;
+  examDays: number;
+  onAdd: () => void;
+  onEdit: (b: PlanBlock) => void;
+  onDelete: (id: string) => void;
+  onStatus: (b: PlanBlock, s: 'full' | 'half' | 'none') => void;
+}) {
+  const monthLabel = calMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  const remaining = Math.max(0, todayTarget - todayDone);
+
+  return (
+    <div className="grid lg:grid-cols-[minmax(260px,340px)_1fr] gap-4">
+      <div className="space-y-3">
+        <div className="rounded-2xl border border-white/10 bg-[#1E293B] p-4">
+          <div className="flex items-center justify-between mb-1">
+            <div>
+              <div className="text-sm font-semibold text-[#F8FAFC]">{monthLabel}</div>
+              <div className="text-[11px] text-[#64748B]">Exam · {examDays} days</div>
+            </div>
+            <div className="flex gap-1">
+              <button
+                onClick={() => setCalMonth(new Date(calMonth.getFullYear(), calMonth.getMonth() - 1, 1))}
+                className="rounded-lg p-1.5 text-[#94A3B8] hover:bg-white/5"
+              >
+                <ChevronLeft size={16} />
+              </button>
+              <button
+                onClick={() => setCalMonth(new Date(calMonth.getFullYear(), calMonth.getMonth() + 1, 1))}
+                className="rounded-lg p-1.5 text-[#94A3B8] hover:bg-white/5"
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+          <div className="grid grid-cols-7 gap-1 text-center text-[10px] text-[#64748B] mb-1 mt-3">
+            {['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'].map(d => (
+              <div key={d}>{d}</div>
+            ))}
+          </div>
+          <div className="grid grid-cols-7 gap-1">
+            {calCells.map(c => {
+              const pct = dayPct(blocksByDate[c.dateStr] || []);
+              const selected = c.dateStr === selectedDate;
+              const has = (blocksByDate[c.dateStr] || []).length > 0;
+              let tone = 'text-[#64748B]';
+              if (c.inMonth && has) {
+                if (pct >= 90) tone = 'text-[#22C55E]';
+                else if (pct >= 50) tone = 'text-[#EAB308]';
+                else tone = 'text-[#F97316]';
+              } else if (c.inMonth) tone = 'text-[#F8FAFC]';
+              return (
+                <button
+                  key={c.dateStr + String(c.inMonth)}
+                  onClick={() => setSelectedDate(c.dateStr)}
+                  className={`aspect-square rounded-lg text-xs font-medium flex flex-col items-center justify-center ${
+                    selected ? 'ring-2 ring-[#3B82F6] bg-[#3B82F6]/15' : c.inMonth ? 'hover:bg-white/5' : 'opacity-30'
+                  } ${tone}`}
+                >
+                  <span>{c.day}</span>
+                  {has && c.inMonth && <span className="text-[9px] opacity-80">{pct}%</span>}
+                </button>
+              );
+            })}
+          </div>
+          <div className="flex flex-wrap gap-3 mt-3 text-[10px] text-[#64748B]">
+            <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-[#22C55E]" /> 90%+</span>
+            <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-[#EAB308]" /> 50–89%</span>
+            <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-[#F97316]" /> Under 50%</span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-3 gap-2">
+          {[
+            { v: String(greenDays), l: 'green days' },
+            { v: '0', l: 'day streak' },
+            { v: '—', l: 'last 14 days' },
+          ].map(s => (
+            <div key={s.l} className="rounded-xl border border-white/10 bg-[#1E293B] px-2 py-3 text-center">
+              <div className="text-lg font-bold text-[#F8FAFC]">{s.v}</div>
+              <div className="text-[10px] text-[#64748B]">{s.l}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-white/10 bg-[#1E293B] p-4 sm:p-5 min-h-[420px]">
+        <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
+          <div>
+            <div className="text-xs text-[#64748B]">Selected day</div>
+            <div className="text-lg font-semibold text-[#F8FAFC]">
+              {new Date(selectedDate + 'T12:00').toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long' })}
+            </div>
+            <div className="text-xs text-[#94A3B8] mt-1">
+              Target {formatTime(todayTarget)} · Completed {formatTime(todayDone)}
+              <span className="ml-2 text-[#3B82F6] font-medium">{todayPct}%</span>
+            </div>
+          </div>
+          <button
+            onClick={onAdd}
+            className="flex items-center gap-1.5 rounded-xl bg-[#3B82F6] hover:bg-[#2563EB] px-3 py-2 text-xs font-medium text-white"
+          >
+            <Plus size={14} /> Add a block
+          </button>
+        </div>
+
+        {remaining > 0 && todayTarget > 0 && (
+          <div className="mb-3 rounded-xl border border-[#22C55E]/25 bg-[#22C55E]/10 px-3 py-2 text-xs text-[#86EFAC]">
+            {formatTime(remaining)} left in this day&apos;s plan.
+          </div>
+        )}
+
+        <div className="flex gap-1 rounded-xl bg-[#0B1120]/60 p-1 w-fit mb-4">
+          {(['list', 'clock'] as const).map(v => (
+            <button
+              key={v}
+              onClick={() => setDayView(v)}
+              className={`rounded-lg px-3 py-1 text-xs font-medium capitalize ${
+                dayView === v ? 'bg-[#3B82F6] text-white' : 'text-[#94A3B8]'
+              }`}
+            >
+              {v}
+            </button>
+          ))}
+        </div>
+
+        {dayView === 'list' ? (
+          blocksForDate.length === 0 ? (
+            <div className="py-16 text-center">
+              <Calendar size={32} className="mx-auto text-[#334155] mb-2" />
+              <p className="text-sm text-[#94A3B8]">No blocks for this day</p>
+              <p className="text-xs text-[#64748B] mt-1">Tap “Add a block” to plan topics and target times.</p>
+            </div>
+          ) : (
+            <div className="space-y-2.5">
+              {blocksForDate.map(b => (
+                <div key={b.id} className="rounded-xl border border-white/5 bg-[#0B1120]/40 p-3.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="text-xs text-[#94A3B8]">
+                        {fmtClock(b.start_time)} – {fmtClock(b.end_time)}
+                      </div>
+                      <div className="text-sm font-medium text-[#F8FAFC] mt-0.5">{b.title}</div>
+                      <div className="flex flex-wrap items-center gap-2 mt-1">
+                        <span
+                          className="rounded-full px-2 py-0.5 text-[10px] font-medium"
+                          style={{
+                            background: (PAPER_COLORS[b.paper] || '#3B82F6') + '22',
+                            color: PAPER_COLORS[b.paper] || '#3B82F6',
+                          }}
+                        >
+                          {b.paper}
+                        </span>
+                        <span className="text-xs text-[#64748B]">
+                          Target {formatTime(b.target_min)} · Completed {formatTime(b.completed_min)}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex gap-1 shrink-0">
+                      <button onClick={() => onEdit(b)} className="p-1.5 text-[#64748B] hover:text-white"><Edit2 size={14} /></button>
+                      <button onClick={() => onDelete(b.id)} className="p-1.5 text-[#64748B] hover:text-[#F97316]"><Trash2 size={14} /></button>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 mt-3">
+                    {(['full', 'half', 'none'] as const).map(s => (
+                      <button
+                        key={s}
+                        onClick={() => onStatus(b, s)}
+                        className={`rounded-lg px-2.5 py-1 text-[11px] font-medium capitalize border transition-colors ${
+                          b.status === s
+                            ? s === 'full' ? 'border-[#22C55E]/40 bg-[#22C55E]/15 text-[#22C55E]'
+                              : s === 'half' ? 'border-[#EAB308]/40 bg-[#EAB308]/15 text-[#EAB308]'
+                              : 'border-white/20 bg-white/5 text-[#94A3B8]'
+                            : 'border-white/10 text-[#94A3B8] hover:bg-white/5'
+                        }`}
+                      >
+                        {s === 'full' ? 'Full' : s === 'half' ? 'Half' : 'None'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )
+        ) : (
+          <ClockView blocks={blocksForDate} pct={todayPct} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ClockView({ blocks, pct }: { blocks: PlanBlock[]; pct: number }) {
+  const r = 70;
+  const circ = 2 * Math.PI * r;
+  const planned = blocks.length ? 100 : 0;
+  const done = pct;
+
+  return (
+    <div className="flex flex-col items-center justify-center py-8">
+      <div className="relative h-48 w-48">
+        <svg viewBox="0 0 180 180" className="h-full w-full -rotate-90">
+          <circle cx="90" cy="90" r={r} fill="none" stroke="#334155" strokeWidth="12" />
+          <circle
+            cx="90" cy="90" r={r} fill="none" stroke="#475569" strokeWidth="12"
+            strokeDasharray={`${(planned / 100) * circ} ${circ}`}
+            strokeLinecap="round"
+          />
+          <circle
+            cx="90" cy="90" r={r} fill="none" stroke="#22C55E" strokeWidth="12"
+            strokeDasharray={`${(done / 100) * circ} ${circ}`}
+            strokeLinecap="round"
+          />
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <div className="text-3xl font-bold text-[#F8FAFC]">{pct}%</div>
+          <div className="text-xs text-[#64748B]">done</div>
+        </div>
+      </div>
+      <div className="flex gap-4 mt-4 text-[11px] text-[#94A3B8]">
+        <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-[#475569]" /> Planned</span>
+        <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-[#22C55E]" /> Completed</span>
+      </div>
+      <p className="text-[11px] text-[#64748B] mt-3 text-center max-w-xs">
+        {blocks.length} block{blocks.length === 1 ? '' : 's'} · switch to List to mark Full / Half / None
+      </p>
+    </div>
+  );
+}
+
+function HabitsTab({
+  calMonth, setCalMonth, calCells, selectedDate, setSelectedDate, blocksByDate,
+  logs, sessions, mocks, streak, studiedTodayMin,
+}: {
+  calMonth: Date;
+  setCalMonth: (d: Date) => void;
+  calCells: { dateStr: string; day: number; inMonth: boolean }[];
+  selectedDate: string;
+  setSelectedDate: (d: string) => void;
+  blocksByDate: Record<string, PlanBlock[]>;
+  logs: DayLog[];
+  sessions: FocusSession[];
+  mocks: MockScore[];
+  streak: number;
+  studiedTodayMin: number;
+}) {
+  const monthLabel = calMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  const selectedBlocks = blocksByDate[selectedDate] || [];
+  const selectedMin =
+    selectedBlocks.reduce((s, b) => s + (b.completed_min || 0), 0) +
+    logs.filter(l => l.date === selectedDate).reduce((s, l) => s + (l.duration_min || 0), 0) +
+    sessions.filter(s => s.completed_at.startsWith(selectedDate)).reduce((s, sess) => s + sess.duration, 0);
+
+  const weekBars = useMemo(() => {
+    return Array.from({ length: 7 }).map((_, i) => {
+      const d = new Date();
+      d.setDate(d.getDate() - (6 - i));
+      const ds = toLocalISO(d);
+      const mins =
+        (blocksByDate[ds] || []).reduce((s, b) => s + (b.completed_min || 0), 0) +
+        logs.filter(l => l.date === ds).reduce((s, l) => s + (l.duration_min || 0), 0);
+      return { day: d.toLocaleDateString('en-US', { weekday: 'short' }), mins };
+    });
+  }, [blocksByDate, logs]);
+
+  const bestMock = mocks.length ? Math.max(...mocks.map(m => m.score)) : null;
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-2xl border border-white/10 bg-[#1E293B] p-4">
+        <div className="flex flex-col lg:flex-row gap-4">
+          <div className="flex-1">
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <div className="text-sm font-semibold text-[#F8FAFC]">Study calendar</div>
+                <div className="text-[11px] text-[#64748B]">{streak}-day streak</div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button onClick={() => setCalMonth(new Date(calMonth.getFullYear(), calMonth.getMonth() - 1, 1))} className="p-1 text-[#94A3B8]"><ChevronLeft size={16} /></button>
+                <span className="text-xs text-[#F8FAFC] min-w-[100px] text-center">{monthLabel}</span>
+                <button onClick={() => setCalMonth(new Date(calMonth.getFullYear(), calMonth.getMonth() + 1, 1))} className="p-1 text-[#94A3B8]"><ChevronRight size={16} /></button>
+              </div>
+            </div>
+            <div className="grid grid-cols-7 gap-1 text-center text-[10px] text-[#64748B] mb-1">
+              {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => <div key={d}>{d}</div>)}
+            </div>
+            <div className="grid grid-cols-7 gap-1">
+              {calCells.map(c => {
+                const mins =
+                  (blocksByDate[c.dateStr] || []).reduce((s, b) => s + (b.completed_min || 0), 0) +
+                  logs.filter(l => l.date === c.dateStr).reduce((s, l) => s + (l.duration_min || 0), 0);
+                const intensity = mins === 0 ? 0 : mins < 60 ? 1 : mins < 180 ? 2 : 3;
+                const bg = ['bg-transparent', 'bg-[#3B82F6]/25', 'bg-[#3B82F6]/50', 'bg-[#3B82F6]'][intensity];
+                return (
+                  <button
+                    key={c.dateStr + String(c.inMonth)}
+                    onClick={() => setSelectedDate(c.dateStr)}
+                    className={`aspect-square rounded-md text-[11px] ${c.inMonth ? 'text-[#F8FAFC]' : 'text-[#334155]'} ${bg} ${
+                      c.dateStr === selectedDate ? 'ring-2 ring-[#3B82F6]' : ''
+                    }`}
+                  >
+                    {c.day}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div className="lg:w-72 rounded-xl border border-white/5 bg-[#0B1120]/50 p-4">
+            <div className="text-xs text-[#64748B]">
+              {new Date(selectedDate + 'T12:00').toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long' })}
+            </div>
+            <div className="text-2xl font-bold text-[#F8FAFC] mt-2">{formatTime(selectedMin)}</div>
+            <div className="text-xs text-[#94A3B8]">study time tracked</div>
+            <div className="mt-3 text-xs text-[#64748B]">
+              Plan blocks: {selectedBlocks.length} · {dayPct(selectedBlocks)}% of targets
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid lg:grid-cols-2 gap-4">
+        <div className="rounded-2xl border border-white/10 bg-[#1E293B] p-5">
+          <h3 className="text-sm font-semibold text-[#F8FAFC] mb-3 flex items-center gap-2">
+            <BarChart3 size={16} className="text-[#3B82F6]" /> Study time this week
+          </h3>
+          <div className="h-40">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={weekBars}>
+                <XAxis dataKey="day" tick={{ fill: '#64748B', fontSize: 11 }} axisLine={false} tickLine={false} />
+                <YAxis hide />
+                <Tooltip
+                  contentStyle={{ background: '#1E293B', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }}
+                  labelStyle={{ color: '#94A3B8' }}
+                  formatter={(v: number) => [formatTime(v), 'Studied']}
+                />
+                <Bar dataKey="mins" fill="#3B82F6" radius={[6, 6, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-white/10 bg-[#1E293B] p-5 space-y-3">
+          <h3 className="text-sm font-semibold text-[#F8FAFC] mb-1">Personal bests</h3>
+          {[
+            { icon: <Flame size={16} className="text-[#F97316]" />, label: 'Longest streak', value: `${streak} day${streak === 1 ? '' : 's'}` },
+            { icon: <Zap size={16} className="text-[#EAB308]" />, label: 'Study today', value: formatTime(studiedTodayMin) },
+            { icon: <Award size={16} className="text-[#3B82F6]" />, label: 'Best mock score', value: bestMock != null ? String(bestMock) : 'None yet' },
+          ].map(item => (
+            <div key={item.label} className="flex items-center gap-3 rounded-xl border border-white/5 bg-[#0B1120]/40 px-3 py-2.5">
+              {item.icon}
+              <div>
+                <div className="text-xs text-[#64748B]">{item.label}</div>
+                <div className="text-sm font-semibold text-[#F8FAFC]">{item.value}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BlockModal({
+  open, editing, defaultDate, onClose, onSave,
+}: {
+  open: boolean;
+  editing: PlanBlock | null;
+  defaultDate: string;
+  onClose: () => void;
+  onSave: (d: Partial<PlanBlock>) => void;
+}) {
+  const [title, setTitle] = useState('');
+  const [paper, setPaper] = useState('Laws');
+  const [start, setStart] = useState('09:00');
+  const [end, setEnd] = useState('10:00');
+  const [target, setTarget] = useState('');
   const [notes, setNotes] = useState('');
 
   useEffect(() => {
     if (open) {
-      setDate(editing?.date || todayISO());
-      setPaper(editing?.paper || 'Paper 1 Accounting');
-      setScore(editing?.score ?? 0);
-      setMaxScore(editing?.max_score ?? 100);
-      setConfident(editing?.confident_attempts ?? 0);
-      setGuessed(editing?.guessed_attempts ?? 0);
-      setWrong(editing?.wrong_guesses ?? 0);
+      setTitle(editing?.title || '');
+      setPaper(editing?.paper || 'Laws');
+      setStart(editing?.start_time || '09:00');
+      setEnd(editing?.end_time || '10:00');
+      setTarget(editing ? String(editing.target_min) : '');
       setNotes(editing?.notes || '');
     }
   }, [open, editing]);
 
-  const papers = [
-    'Paper 1 Accounting',
-    'Paper 2 Business Laws',
-    'Paper 3 Quant Aptitude',
-    'Paper 4 Business Economics',
-  ];
+  const auto = minutesBetween(start, end);
+  const targetMin = target !== '' ? Math.max(0, +target || 0) : auto;
 
   return (
-    <Modal open={open} onClose={onClose} title={editing ? 'Edit Mock Score' : 'Log Mock Score'}>
+    <Modal open={open} onClose={onClose} title={editing ? 'Edit block' : 'Add a block'}>
       <div className="space-y-3">
         <div>
-          <label className="mb-1 block text-xs font-medium text-[#A8A29A]">Date</label>
-          <input type="date" value={date} onChange={e => setDate(e.target.value)} className="w-full rounded-xl border border-[rgba(255,236,200,0.1)] bg-[#0F0E0C] px-3 py-2.5 text-sm text-[#F5F0E8] outline-none focus:border-[#E8B86D]" />
+          <label className="mb-1 block text-xs font-medium text-[#94A3B8]">Topic</label>
+          <input
+            value={title}
+            onChange={e => setTitle(e.target.value)}
+            placeholder="e.g. The Limited Liability Partnership Act, 2008"
+            className="w-full rounded-xl border border-white/10 bg-[#0B1120] px-3 py-2.5 text-sm text-[#F8FAFC] outline-none focus:border-[#3B82F6]"
+          />
         </div>
         <div>
-          <label className="mb-1 block text-xs font-medium text-[#A8A29A]">Paper</label>
-          <select value={paper} onChange={e => setPaper(e.target.value)} className="w-full rounded-xl border border-[rgba(255,236,200,0.1)] bg-[#0F0E0C] px-3 py-2.5 text-sm text-[#F5F0E8] outline-none focus:border-[#E8B86D]">
-            {papers.map(p => <option key={p} value={p}>{p}</option>)}
-          </select>
+          <label className="mb-1 block text-xs font-medium text-[#94A3B8]">Subject</label>
+          <div className="flex flex-wrap gap-1.5">
+            {['Acc', 'Laws', 'QA', 'Econ'].map(p => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => setPaper(p)}
+                className={`rounded-full px-3 py-1 text-xs font-medium border ${
+                  paper === p ? 'border-[#3B82F6] bg-[#3B82F6]/20 text-[#3B82F6]' : 'border-white/10 text-[#94A3B8]'
+                }`}
+              >
+                {p}
+              </button>
+            ))}
+          </div>
         </div>
         <div className="grid grid-cols-2 gap-2">
           <div>
-            <label className="mb-1 block text-xs font-medium text-[#A8A29A]">Score</label>
-            <input type="number" value={score} onChange={e => setScore(+e.target.value)} className="w-full rounded-xl border border-[rgba(255,236,200,0.1)] bg-[#0F0E0C] px-3 py-2.5 text-sm text-[#F5F0E8] outline-none focus:border-[#E8B86D]" />
+            <label className="mb-1 block text-xs font-medium text-[#94A3B8]">Start</label>
+            <input type="time" value={start} onChange={e => { setStart(e.target.value); setTarget(''); }} className="w-full rounded-xl border border-white/10 bg-[#0B1120] px-3 py-2.5 text-sm text-[#F8FAFC] outline-none focus:border-[#3B82F6]" />
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-[#A8A29A]">Max</label>
-            <input type="number" value={maxScore} onChange={e => setMaxScore(+e.target.value)} className="w-full rounded-xl border border-[rgba(255,236,200,0.1)] bg-[#0F0E0C] px-3 py-2.5 text-sm text-[#F5F0E8] outline-none focus:border-[#E8B86D]" />
-          </div>
-        </div>
-        <div className="grid grid-cols-3 gap-2">
-          <div>
-            <label className="mb-1 block text-xs font-medium text-[#A8A29A]">Confident</label>
-            <input type="number" value={confident} onChange={e => setConfident(+e.target.value)} className="w-full rounded-xl border border-[rgba(255,236,200,0.1)] bg-[#0F0E0C] px-2 py-2 text-sm text-[#F5F0E8] outline-none focus:border-[#E8B86D]" />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-[#A8A29A]">Guessed</label>
-            <input type="number" value={guessed} onChange={e => setGuessed(+e.target.value)} className="w-full rounded-xl border border-[rgba(255,236,200,0.1)] bg-[#0F0E0C] px-2 py-2 text-sm text-[#F5F0E8] outline-none focus:border-[#E8B86D]" />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-[#A8A29A]">Wrong guess</label>
-            <input type="number" value={wrong} onChange={e => setWrong(+e.target.value)} className="w-full rounded-xl border border-[rgba(255,236,200,0.1)] bg-[#0F0E0C] px-2 py-2 text-sm text-[#F5F0E8] outline-none focus:border-[#E8B86D]" />
+            <label className="mb-1 block text-xs font-medium text-[#94A3B8]">End</label>
+            <input type="time" value={end} onChange={e => { setEnd(e.target.value); setTarget(''); }} className="w-full rounded-xl border border-white/10 bg-[#0B1120] px-3 py-2.5 text-sm text-[#F8FAFC] outline-none focus:border-[#3B82F6]" />
           </div>
         </div>
         <div>
-          <label className="mb-1 block text-xs font-medium text-[#A8A29A]">Notes</label>
-          <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} className="w-full rounded-xl border border-[rgba(255,236,200,0.1)] bg-[#0F0E0C] px-3 py-2 text-sm text-[#F5F0E8] outline-none focus:border-[#E8B86D] resize-none" />
+          <label className="mb-1 block text-xs font-medium text-[#94A3B8]">Target (minutes)</label>
+          <input
+            type="number"
+            value={target !== '' ? target : auto}
+            onChange={e => setTarget(e.target.value)}
+            className="w-full rounded-xl border border-white/10 bg-[#0B1120] px-3 py-2.5 text-sm text-[#F8FAFC] outline-none focus:border-[#3B82F6]"
+          />
+          <p className="text-[10px] text-[#64748B] mt-1">From times: {formatTime(auto)}</p>
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-[#94A3B8]">Notes</label>
+          <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} className="w-full rounded-xl border border-white/10 bg-[#0B1120] px-3 py-2 text-sm text-[#F8FAFC] outline-none focus:border-[#3B82F6] resize-none" />
         </div>
         <button
-          onClick={() => onSave({ date, paper, score, max_score: maxScore, confident_attempts: confident, guessed_attempts: guessed, wrong_guesses: wrong, notes })}
-          className="w-full rounded-xl bg-[#E8B86D] px-4 py-2.5 text-sm font-semibold text-black hover:bg-[#F0C98A]"
+          onClick={() => onSave({
+            date: editing?.date || defaultDate,
+            title, paper, start_time: start, end_time: end, target_min: targetMin, notes,
+            completed_min: editing?.completed_min || 0,
+            status: editing?.status || '',
+          })}
+          disabled={!title.trim()}
+          className="w-full rounded-xl bg-[#3B82F6] hover:bg-[#2563EB] py-2.5 text-sm font-semibold text-white disabled:opacity-40"
         >
-          {editing ? 'Save Changes' : 'Save Mock'}
+          {editing ? 'Save changes' : 'Add block'}
         </button>
       </div>
     </Modal>

@@ -18,10 +18,11 @@ export const SYNC_TABLES: TableName[] = [
   'exams',
   'mock_scores',
   'day_logs',
+  'plan_blocks',
 ];
 
 /** Tables that may not exist yet on older Supabase projects */
-const OPTIONAL_TABLES = new Set<TableName>(['mock_scores', 'day_logs']);
+const OPTIONAL_TABLES = new Set<TableName>(['mock_scores', 'day_logs', 'plan_blocks']);
 
 let syncTimer: ReturnType<typeof setTimeout> | null = null;
 let syncing = false;

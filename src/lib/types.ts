@@ -195,6 +195,23 @@ export interface DayLog {
   sync_status: SyncStatus;
 }
 
+/** Study plan time block for a specific calendar day (Planner → Plan) */
+export interface PlanBlock {
+  id: string;
+  date: string;
+  start_time: string;
+  end_time: string;
+  title: string;
+  paper: string;
+  target_min: number;
+  completed_min: number;
+  status: 'full' | 'half' | 'none' | 'custom' | '';
+  notes: string;
+  created_at: string;
+  updated_at: string;
+  sync_status: SyncStatus;
+}
+
 export interface DeletedRecord {
   id: string;
   table: string;
@@ -206,4 +223,4 @@ export interface DeletedRecord {
 export type TableName =
   | 'profile' | 'papers' | 'chapters' | 'lessons' | 'revision_history'
   | 'routines' | 'focus_sessions' | 'categories' | 'transactions'
-  | 'diary_entries' | 'life_notes' | 'exams' | 'mock_scores' | 'day_logs';
+  | 'diary_entries' | 'life_notes' | 'exams' | 'mock_scores' | 'day_logs' | 'plan_blocks';

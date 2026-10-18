@@ -1,7 +1,7 @@
 import Dexie, { Table } from 'dexie';
 import type {
   Profile, Paper, Chapter, Lesson, RevisionHistory, Routine,
-  FocusSession, Category, Transaction, DiaryEntry, LifeNote, Exam, MockScore, DayLog, DeletedRecord
+  FocusSession, Category, Transaction, DiaryEntry, LifeNote, Exam, MockScore, DayLog, PlanBlock, DeletedRecord
 } from './types';
 
 export class YoursDB extends Dexie {
@@ -19,6 +19,7 @@ export class YoursDB extends Dexie {
   exams!: Table<Exam, string>;
   mock_scores!: Table<MockScore, string>;
   day_logs!: Table<DayLog, string>;
+  plan_blocks!: Table<PlanBlock, string>;
   deleted_records!: Table<DeletedRecord, string>;
 
   constructor() {
@@ -87,6 +88,25 @@ export class YoursDB extends Dexie {
       exams: 'id, date, sync_status',
       mock_scores: 'id, date, paper, sync_status',
       day_logs: 'id, date, category, sync_status',
+      deleted_records: 'id, table, sync_status',
+    });
+
+    this.version(5).stores({
+      profile: 'id, sync_status',
+      papers: 'id, level, group, sync_status',
+      chapters: 'id, paper_id, status, sync_status',
+      lessons: 'id, chapter_id, sync_status',
+      revision_history: 'id, chapter_id, revised_at, sync_status',
+      routines: 'id, date, repeat_type, sync_status',
+      focus_sessions: 'id, completed_at, subject, sync_status',
+      categories: 'id, type, sync_status',
+      transactions: 'id, date, type, category, sync_status',
+      diary_entries: 'id, date, sync_status',
+      life_notes: 'id, category, pinned, sync_status',
+      exams: 'id, date, sync_status',
+      mock_scores: 'id, date, paper, sync_status',
+      day_logs: 'id, date, category, sync_status',
+      plan_blocks: 'id, date, paper, sync_status',
       deleted_records: 'id, table, sync_status',
     });
   }
