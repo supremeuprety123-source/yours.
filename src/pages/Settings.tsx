@@ -34,6 +34,7 @@ const SECTIONS = [
   { key: 'mock_scores', label: 'Mock Scores' },
   { key: 'day_logs', label: 'Day Logs' },
   { key: 'plan_blocks', label: 'Plan Blocks' },
+  { key: 'timer_sessions', label: 'Timer Sessions' },
 ];
 
 export default function Settings() {

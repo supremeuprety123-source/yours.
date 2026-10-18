@@ -248,3 +248,19 @@ ALTER TABLE plan_blocks DISABLE ROW LEVEL SECURITY;
 
 ALTER TABLE plan_blocks ADD COLUMN IF NOT EXISTS paper_id text;
 ALTER TABLE plan_blocks ADD COLUMN IF NOT EXISTS chapter_id text;
+
+
+-- 16. TIMER SESSIONS (Plan live study timers)
+CREATE TABLE IF NOT EXISTS timer_sessions (
+  id               text PRIMARY KEY,
+  block_id         text,
+  started_at       timestamptz,
+  ended_at         timestamptz,
+  duration_seconds integer,
+  created_at       timestamptz,
+  updated_at       timestamptz
+);
+ALTER TABLE timer_sessions DISABLE ROW LEVEL SECURITY;
+
+ALTER TABLE plan_blocks ADD COLUMN IF NOT EXISTS chapter_name text;
+ALTER TABLE plan_blocks ADD COLUMN IF NOT EXISTS sort_order integer;

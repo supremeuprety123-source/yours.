@@ -205,10 +205,24 @@ export interface PlanBlock {
   paper: string;
   paper_id?: string;
   chapter_id?: string;
+  chapter_name?: string;
   target_min: number;
   completed_min: number;
-  status: 'full' | 'half' | 'none' | 'custom' | '';
+  status: 'planned' | 'in_progress' | 'completed' | 'skipped' | 'full' | 'half' | 'none' | 'custom' | '';
   notes: string;
+  sort_order?: number;
+  created_at: string;
+  updated_at: string;
+  sync_status: SyncStatus;
+}
+
+/** Live / completed study timer sessions (Plan watch) */
+export interface TimerSession {
+  id: string;
+  block_id: string | null;
+  started_at: string;
+  ended_at: string | null;
+  duration_seconds: number;
   created_at: string;
   updated_at: string;
   sync_status: SyncStatus;
@@ -225,4 +239,4 @@ export interface DeletedRecord {
 export type TableName =
   | 'profile' | 'papers' | 'chapters' | 'lessons' | 'revision_history'
   | 'routines' | 'focus_sessions' | 'categories' | 'transactions'
-  | 'diary_entries' | 'life_notes' | 'exams' | 'mock_scores' | 'day_logs' | 'plan_blocks';
+  | 'diary_entries' | 'life_notes' | 'exams' | 'mock_scores' | 'day_logs' | 'plan_blocks' | 'timer_sessions';
