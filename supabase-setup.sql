@@ -245,3 +245,6 @@ CREATE TABLE IF NOT EXISTS plan_blocks (
 );
 
 ALTER TABLE plan_blocks DISABLE ROW LEVEL SECURITY;
+
+ALTER TABLE plan_blocks ADD COLUMN IF NOT EXISTS paper_id text;
+ALTER TABLE plan_blocks ADD COLUMN IF NOT EXISTS chapter_id text;

@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { getAll } from '../lib/store';
 import type { Paper, Chapter, Routine, Transaction, Exam, MockScore, FocusSession, DiaryEntry, Lesson } from '../lib/types';
-import { EXAM_DATE } from '../lib/revisionPlan';
 import { chapterProgressScore, paperProgressScore, levelProgressScore, getGreeting, getCurriculumTree, formatCurrency, daysUntil, formatTime, todayISO } from '../lib/utils';
 import { CheckCircle2, Lock, Circle, Flame, Clock, TrendingUp, Calendar, BookOpen, Target, Award, FileText } from 'lucide-react';
 
@@ -76,9 +75,9 @@ export default function Home() {
 
   const upcomingExams = exams.filter(ex => daysUntil(ex.date) >= 0).sort((a, b) => daysUntil(a.date) - daysUntil(b.date));
   const nextExam = upcomingExams[0];
-  const examDaysLeft = nextExam ? daysUntil(nextExam.date) : daysUntil(EXAM_DATE);
-  const examLabel = nextExam ? nextExam.name : 'CA Foundation';
-  const examDateLabel = nextExam ? nextExam.date : EXAM_DATE;
+  const examDaysLeft = nextExam ? daysUntil(nextExam.date) : null;
+  const examLabel = nextExam ? nextExam.name : 'No exam date';
+  const examDateLabel = nextExam ? nextExam.date : null;
   const recentMocks = mocks.slice(0, 6);
 
   const todaySessions = sessions.filter(s => s.completed_at.startsWith(today));
@@ -155,9 +154,9 @@ export default function Home() {
               <span className="text-xs font-medium">Next Exam</span>
             </div>
             <div className="mt-2">
-              <div className="text-3xl font-bold text-[#E8B86D]">{Math.max(0, examDaysLeft)}</div>
-              <div className="text-xs text-[#8A8478]">days to {examLabel}</div>
-              <div className="text-[10px] text-[#6B6560] mt-0.5">{examDateLabel}</div>
+              <div className="text-3xl font-bold text-[#E8B86D]">{examDaysLeft != null ? Math.max(0, examDaysLeft) : '—'}</div>
+              <div className="text-xs text-[#8A8478]">{examDaysLeft != null ? `days to ${examLabel}` : 'Add exam in Settings'}</div>
+              <div className="text-[10px] text-[#6B6560] mt-0.5">{examDateLabel || 'No date set'}</div>
             </div>
           </div>
         </div>

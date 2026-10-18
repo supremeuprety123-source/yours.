@@ -1,13 +1,12 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { getAll, addRecord, updateRecord, removeRecord } from '../lib/store';
-import type { Chapter, MockScore, DayLog, FocusSession, PlanBlock, Paper } from '../lib/types';
-import { EXAM_DATE } from '../lib/revisionPlan';
+import type { Chapter, MockScore, DayLog, FocusSession, PlanBlock, Paper, Exam } from '../lib/types';
 import { todayISO, formatDate, daysUntil, formatTime, addDays, toLocalISO } from '../lib/utils';
 import Modal from './Modal';
 import {
-  Target, Flame, Plus, Trash2, Edit2, Calendar,
-  Award, ChevronLeft, ChevronRight, BarChart3, Zap,
+  Flame, Plus, Trash2, Edit2, Calendar,
+  Award, ChevronLeft, ChevronRight, BarChart3, Zap, Play, Pause, Square,
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 
@@ -19,6 +18,8 @@ const PAPER_COLORS: Record<string, string> = {
   QA: '#F97316',
   Econ: '#22C55E',
 };
+
+const INACTIVITY_MS = 30 * 60 * 1000; // 30 minutes
 
 function minutesBetween(start: string, end: string): number {
   if (!start || !end) return 0;
@@ -44,6 +45,15 @@ function dayPct(blocks: PlanBlock[]): number {
   return Math.min(100, Math.round((done / target) * 100));
 }
 
+function paperShort(name?: string): string {
+  if (!name) return 'Acc';
+  if (name.includes('Law')) return 'Laws';
+  if (name.includes('Account')) return 'Acc';
+  if (name.includes('Quant') || name.includes('Math')) return 'QA';
+  if (name.includes('Eco')) return 'Econ';
+  return name.slice(0, 6);
+}
+
 interface Props {
   routines: unknown[];
   chapters: Chapter[];
@@ -58,6 +68,7 @@ export default function RevisionPlanView({ chapters, onRoutinesChanged }: Props)
   const [logs, setLogs] = useState<DayLog[]>([]);
   const [sessions, setSessions] = useState<FocusSession[]>([]);
   const [papers, setPapers] = useState<Paper[]>([]);
+  const [exams, setExams] = useState<Exam[]>([]);
   const [selectedDate, setSelectedDate] = useState(todayISO());
   const [calMonth, setCalMonth] = useState(() => {
     const d = new Date();
@@ -67,27 +78,170 @@ export default function RevisionPlanView({ chapters, onRoutinesChanged }: Props)
   const [blockModal, setBlockModal] = useState(false);
   const [editing, setEditing] = useState<PlanBlock | null>(null);
 
-  const load = async () => {
-    const [b, m, l, s, p] = await Promise.all([
+  // Live study watch
+  const [watchOn, setWatchOn] = useState(false);
+  const [watchSubject, setWatchSubject] = useState('Study');
+  const [watchElapsed, setWatchElapsed] = useState(0); // seconds in current run segment
+  const [watchBase, setWatchBase] = useState(0); // accumulated before pause
+  const watchStartRef = useRef<number | null>(null);
+  const lastActiveRef = useRef(Date.now());
+  const watchOnRef = useRef(false);
+  const watchSubjectRef = useRef('Study');
+  const watchBaseRef = useRef(0);
+  const watchElapsedRef = useRef(0);
+
+  useEffect(() => { watchOnRef.current = watchOn; }, [watchOn]);
+  useEffect(() => { watchSubjectRef.current = watchSubject; }, [watchSubject]);
+  useEffect(() => { watchBaseRef.current = watchBase; }, [watchBase]);
+  useEffect(() => { watchElapsedRef.current = watchElapsed; }, [watchElapsed]);
+
+  const load = useCallback(async () => {
+    const [b, m, l, s, p, e] = await Promise.all([
       getAll<PlanBlock>('plan_blocks'),
       getAll<MockScore>('mock_scores'),
       getAll<DayLog>('day_logs'),
       getAll<FocusSession>('focus_sessions'),
       getAll<Paper>('papers'),
+      getAll<Exam>('exams'),
     ]);
     setBlocks(b);
     setMocks(m.sort((a, c) => c.date.localeCompare(a.date)));
     setLogs(l);
     setSessions(s);
     setPapers(p);
-  };
+    setExams(e);
+  }, []);
 
   useEffect(() => {
     load();
-  }, [refreshKey]);
+  }, [refreshKey, load]);
+
+  const saveWatchSession = useCallback(async (totalSec: number, subject: string) => {
+    const mins = Math.floor(totalSec / 60);
+    if (mins < 1) return;
+    await addRecord('focus_sessions', {
+      type: 'stopwatch',
+      duration: mins,
+      subject: subject || 'Study',
+      completed_at: new Date().toISOString(),
+    });
+    await load();
+    refreshAll();
+  }, [load, refreshAll]);
+
+  const stopWatch = useCallback(async (reason?: string) => {
+    if (!watchOnRef.current) return;
+    const started = watchStartRef.current;
+    const extra = started ? Math.floor((Date.now() - started) / 1000) : watchElapsedRef.current;
+    const total = watchBaseRef.current + extra;
+    setWatchOn(false);
+    watchOnRef.current = false;
+    watchStartRef.current = null;
+    setWatchElapsed(0);
+    setWatchBase(0);
+    watchBaseRef.current = 0;
+    watchElapsedRef.current = 0;
+    await saveWatchSession(total, watchSubjectRef.current);
+    if (reason) console.log('[watch] stopped:', reason, total, 'sec');
+  }, [saveWatchSession]);
+
+  const startWatch = () => {
+    lastActiveRef.current = Date.now();
+    watchStartRef.current = Date.now();
+    setWatchOn(true);
+    watchOnRef.current = true;
+  };
+
+  const pauseWatch = () => {
+    if (!watchOnRef.current) return;
+    const started = watchStartRef.current;
+    const extra = started ? Math.floor((Date.now() - started) / 1000) : 0;
+    const next = watchBaseRef.current + extra;
+    setWatchBase(next);
+    watchBaseRef.current = next;
+    setWatchElapsed(0);
+    watchElapsedRef.current = 0;
+    watchStartRef.current = null;
+    setWatchOn(false);
+    watchOnRef.current = false;
+  };
+
+  // Tick + inactivity
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      if (!watchOnRef.current) return;
+      const started = watchStartRef.current;
+      if (started) {
+        const e = Math.floor((Date.now() - started) / 1000);
+        setWatchElapsed(e);
+        watchElapsedRef.current = e;
+      }
+      if (Date.now() - lastActiveRef.current > INACTIVITY_MS) {
+        void stopWatch('inactivity 30m');
+      }
+    }, 1000);
+    return () => clearInterval(id);
+  }, [stopWatch]);
+
+  // Activity listeners
+  useEffect(() => {
+    const bump = () => { lastActiveRef.current = Date.now(); };
+    const events = ['mousemove', 'keydown', 'touchstart', 'click', 'scroll'] as const;
+    events.forEach(ev => window.addEventListener(ev, bump, { passive: true }));
+    return () => events.forEach(ev => window.removeEventListener(ev, bump));
+  }, []);
+
+  // Tab hidden / closed
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState === 'hidden' && watchOnRef.current) {
+        // pause but keep base — user may come back; if away > 30m interval stops
+        const started = watchStartRef.current;
+        const extra = started ? Math.floor((Date.now() - started) / 1000) : 0;
+        const next = watchBaseRef.current + extra;
+        setWatchBase(next);
+        watchBaseRef.current = next;
+        setWatchElapsed(0);
+        watchStartRef.current = null;
+        setWatchOn(false);
+        watchOnRef.current = false;
+      }
+    };
+    const onHide = () => {
+      if (watchOnRef.current) {
+        const started = watchStartRef.current;
+        const extra = started ? Math.floor((Date.now() - started) / 1000) : 0;
+        const total = watchBaseRef.current + extra;
+        // fire-and-forget save on close
+        if (total >= 60) {
+          const payload = {
+            type: 'stopwatch' as const,
+            duration: Math.floor(total / 60),
+            subject: watchSubjectRef.current || 'Study',
+            completed_at: new Date().toISOString(),
+          };
+          // best-effort via store is async; use beacon-like approach through sync pending
+          void addRecord('focus_sessions', payload);
+        }
+        watchOnRef.current = false;
+      }
+    };
+    document.addEventListener('visibilitychange', onVis);
+    window.addEventListener('pagehide', onHide);
+    return () => {
+      document.removeEventListener('visibilitychange', onVis);
+      window.removeEventListener('pagehide', onHide);
+    };
+  }, []);
 
   const today = todayISO();
-  const examDays = EXAM_DATE ? Math.max(0, daysUntil(EXAM_DATE)) : 0;
+  const nextExam = useMemo(() => {
+    const upcoming = exams.filter(ex => daysUntil(ex.date) >= 0).sort((a, b) => daysUntil(a.date) - daysUntil(b.date));
+    return upcoming[0] || null;
+  }, [exams]);
+  const examDays = nextExam ? Math.max(0, daysUntil(nextExam.date)) : null;
+
+  const watchDisplaySec = watchBase + watchElapsed;
 
   const blocksForDate = useMemo(
     () =>
@@ -106,18 +260,21 @@ export default function RevisionPlanView({ chapters, onRoutinesChanged }: Props)
   }, [blocks]);
 
   const todayBlocks = blocksByDate[today] || [];
-  const todayTarget = todayBlocks.reduce((s, b) => s + (b.target_min || 0), 0);
   const todayDone = todayBlocks.reduce((s, b) => s + (b.completed_min || 0), 0);
+
+  const todaySessions = useMemo(
+    () => sessions.filter(s => s.completed_at.startsWith(today)).sort((a, b) => a.completed_at.localeCompare(b.completed_at)),
+    [sessions, today]
+  );
 
   const studiedTodayMin = useMemo(() => {
     const fromLogs = logs
       .filter(l => l.date === today && (l.category === 'Study' || l.category === 'Coaching'))
       .reduce((s, l) => s + (l.duration_min || 0), 0);
-    const fromFocus = sessions
-      .filter(s => s.completed_at.startsWith(today))
-      .reduce((s, sess) => s + sess.duration, 0);
-    return fromLogs + fromFocus + todayDone;
-  }, [logs, sessions, today, todayDone]);
+    const fromFocus = todaySessions.reduce((s, sess) => s + sess.duration, 0);
+    const live = Math.floor(watchDisplaySec / 60);
+    return fromLogs + fromFocus + todayDone + live;
+  }, [logs, today, todaySessions, todayDone, watchDisplaySec]);
 
   const streak = useMemo(() => {
     let n = 0;
@@ -133,27 +290,45 @@ export default function RevisionPlanView({ chapters, onRoutinesChanged }: Props)
     return n;
   }, [blocksByDate, logs, sessions, today]);
 
+  // What to study next: incomplete plan blocks (today → future), then incomplete chapters
   const studyNext = useMemo(() => {
-    return [...chapters]
+    const fromBlocks = [...blocks]
+      .filter(b => b.date >= today && (b.status !== 'full') && (b.completed_min || 0) < (b.target_min || 1))
+      .sort((a, b) => a.date.localeCompare(b.date) || (a.start_time || '').localeCompare(b.start_time || ''))
+      .slice(0, 5)
+      .map(b => ({
+        id: b.id,
+        title: b.title,
+        paper: b.paper || 'Acc',
+        date: b.date,
+        solvedHint: `${b.date.slice(5)} · ${fmtClock(b.start_time)} · Target ${formatTime(b.target_min)}`,
+        status: b.status === 'half' ? 'in_progress' : 'not_started',
+        fromPlan: true as const,
+      }));
+
+    if (fromBlocks.length >= 5) return fromBlocks;
+
+    const usedChapterIds = new Set(blocks.map(b => b.chapter_id).filter(Boolean));
+    const fromChapters = [...chapters]
       .filter(c => c.status !== 'completed' || (c.completion || 0) < 100)
       .sort((a, b) => (a.completion || 0) - (b.completion || 0))
-      .slice(0, 5)
+      .filter(c => !usedChapterIds.has(c.id) || fromBlocks.length === 0)
+      .slice(0, 5 - fromBlocks.length)
       .map(c => {
         const paper = papers.find(p => p.id === c.paper_id);
-        const short =
-          paper?.name?.includes('Law') ? 'Laws' :
-          paper?.name?.includes('Account') ? 'Acc' :
-          paper?.name?.includes('Quant') || paper?.name?.includes('Math') ? 'QA' :
-          paper?.name?.includes('Eco') ? 'Econ' : 'Acc';
         return {
           id: c.id,
           title: c.name,
-          paper: short,
+          paper: paperShort(paper?.name),
+          date: '',
           solvedHint: `${c.completion || 0}% · ${c.status === 'not_started' ? 'Not started' : c.status === 'in_progress' ? 'In progress' : 'Done'}`,
           status: c.status,
+          fromPlan: false as const,
         };
       });
-  }, [chapters, papers]);
+
+    return [...fromBlocks, ...fromChapters];
+  }, [blocks, chapters, papers, today]);
 
   const setBlockStatus = async (b: PlanBlock, status: 'full' | 'half' | 'none') => {
     const completed =
@@ -176,6 +351,8 @@ export default function RevisionPlanView({ chapters, onRoutinesChanged }: Props)
       end_time: end,
       title: (data.title || '').trim() || 'Study block',
       paper: data.paper || 'Acc',
+      paper_id: data.paper_id || '',
+      chapter_id: data.chapter_id || '',
       target_min: target,
       completed_min: data.completed_min ?? 0,
       status: data.status || '',
@@ -222,12 +399,86 @@ export default function RevisionPlanView({ chapters, onRoutinesChanged }: Props)
     return Object.entries(blocksByDate).filter(([, bs]) => dayPct(bs) >= 90).length;
   }, [blocksByDate]);
 
+  const openBlockFromNext = (item: { fromPlan?: boolean; id: string; date?: string }) => {
+    setTab('planner');
+    if (item.fromPlan && item.date) setSelectedDate(item.date);
+  };
+
   return (
     <div className="sc-plan space-y-5">
+      {/* Study watch bar */}
+      <div className="rounded-2xl border border-white/10 bg-[#1E293B] p-4">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
+          <div>
+            <div className="text-xs text-[#94A3B8]">Today&apos;s study time</div>
+            <div className="text-3xl font-bold text-[#F8FAFC] tabular-nums">{formatTime(studiedTodayMin)}</div>
+            <div className="text-[11px] text-[#64748B] mt-0.5">
+              Plan done + focus sessions + live watch · auto-stops after 30m idle or tab close
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={watchSubject}
+              onChange={e => setWatchSubject(e.target.value)}
+              disabled={watchOn}
+              className="rounded-xl border border-white/10 bg-[#0B1120] px-3 py-2 text-xs text-[#F8FAFC] outline-none"
+            >
+              <option value="Study">Study</option>
+              {['Acc', 'Laws', 'QA', 'Econ'].map(p => (
+                <option key={p} value={p}>{p}</option>
+              ))}
+              {papers.map(p => (
+                <option key={p.id} value={p.name}>{p.name}</option>
+              ))}
+            </select>
+            <div className="rounded-xl border border-white/10 bg-[#0B1120] px-3 py-2 text-sm font-mono text-[#3B82F6] min-w-[72px] text-center tabular-nums">
+              {String(Math.floor(watchDisplaySec / 3600)).padStart(2, '0')}:
+              {String(Math.floor((watchDisplaySec % 3600) / 60)).padStart(2, '0')}:
+              {String(watchDisplaySec % 60).padStart(2, '0')}
+            </div>
+            {!watchOn ? (
+              <button onClick={startWatch} className="flex items-center gap-1.5 rounded-xl bg-[#22C55E] hover:bg-[#16A34A] px-3 py-2 text-xs font-semibold text-white">
+                <Play size={14} /> Start
+              </button>
+            ) : (
+              <button onClick={pauseWatch} className="flex items-center gap-1.5 rounded-xl bg-[#EAB308] hover:bg-[#CA8A04] px-3 py-2 text-xs font-semibold text-black">
+                <Pause size={14} /> Pause
+              </button>
+            )}
+            <button
+              onClick={() => void stopWatch('manual')}
+              disabled={!watchOn && watchBase === 0 && watchElapsed === 0}
+              className="flex items-center gap-1.5 rounded-xl border border-white/10 px-3 py-2 text-xs font-medium text-[#F8FAFC] hover:bg-white/5 disabled:opacity-40"
+            >
+              <Square size={14} /> Save
+            </button>
+          </div>
+        </div>
+        {todaySessions.length > 0 && (
+          <div className="mt-3 border-t border-white/5 pt-3">
+            <div className="text-[11px] text-[#64748B] mb-1.5">Individual sessions today</div>
+            <div className="flex flex-wrap gap-1.5">
+              {todaySessions.map(s => (
+                <span key={s.id} className="rounded-lg bg-[#0B1120] border border-white/5 px-2 py-1 text-[11px] text-[#94A3B8]">
+                  <span className="text-[#F8FAFC] font-medium">{formatTime(s.duration)}</span>
+                  {' · '}{s.subject || 'Study'}
+                  <span className="text-[#64748B]"> · {s.completed_at.slice(11, 16)}</span>
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Header + tabs */}
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
         <div>
           <h2 className="text-2xl font-bold text-[#F8FAFC] tracking-tight">Your plan</h2>
-          <p className="text-sm text-[#94A3B8] mt-0.5">4 subjects · CA Foundation · Jan 2027</p>
+          <p className="text-sm text-[#94A3B8] mt-0.5">
+            {nextExam
+              ? `${nextExam.name} · ${formatDate(nextExam.date)} · ${examDays} days left`
+              : '4 subjects · CA Foundation · set exam date in Settings'}
+          </p>
         </div>
         <div className="flex gap-1 rounded-xl bg-[#1E293B] border border-white/10 p-1 w-fit">
           {([
@@ -253,11 +504,13 @@ export default function RevisionPlanView({ chapters, onRoutinesChanged }: Props)
           studiedMin={studiedTodayMin}
           streak={streak}
           examDays={examDays}
+          nextExam={nextExam}
           studyNext={studyNext}
           chapters={chapters}
           papers={papers}
           mocks={mocks}
           onOpenPlanner={() => setTab('planner')}
+          onOpenItem={openBlockFromNext}
         />
       )}
 
@@ -277,6 +530,7 @@ export default function RevisionPlanView({ chapters, onRoutinesChanged }: Props)
           todayDone={blocksForDate.reduce((s, b) => s + (b.completed_min || 0), 0)}
           greenDays={greenDays}
           examDays={examDays}
+          nextExam={nextExam}
           onAdd={() => { setEditing(null); setBlockModal(true); }}
           onEdit={b => { setEditing(b); setBlockModal(true); }}
           onDelete={deleteBlock}
@@ -305,6 +559,8 @@ export default function RevisionPlanView({ chapters, onRoutinesChanged }: Props)
           open={blockModal}
           editing={editing}
           defaultDate={selectedDate}
+          papers={papers}
+          chapters={chapters}
           onClose={() => { setBlockModal(false); setEditing(null); }}
           onSave={saveBlock}
         />
@@ -314,26 +570,24 @@ export default function RevisionPlanView({ chapters, onRoutinesChanged }: Props)
 }
 
 function OverviewTab({
-  studiedMin, streak, examDays, studyNext, chapters, papers, mocks, onOpenPlanner,
+  studiedMin, streak, examDays, nextExam, studyNext, chapters, papers, mocks, onOpenPlanner, onOpenItem,
 }: {
   studiedMin: number;
   streak: number;
-  examDays: number;
-  studyNext: { id: string; title: string; paper: string; solvedHint: string; status: string }[];
+  examDays: number | null;
+  nextExam: Exam | null;
+  studyNext: { id: string; title: string; paper: string; solvedHint: string; status: string; fromPlan?: boolean; date?: string }[];
   chapters: Chapter[];
   papers: Paper[];
   mocks: MockScore[];
   onOpenPlanner: () => void;
+  onOpenItem: (item: { fromPlan?: boolean; id: string; date?: string }) => void;
 }) {
   const byPaper = useMemo(() => {
     const map: Record<string, { total: number; done: number }> = {};
     for (const c of chapters) {
       const paper = papers.find(p => p.id === c.paper_id);
-      const key =
-        paper?.name?.includes('Law') ? 'Laws' :
-        paper?.name?.includes('Account') ? 'Acc' :
-        paper?.name?.includes('Quant') || paper?.name?.includes('Math') ? 'QA' :
-        paper?.name?.includes('Eco') ? 'Econ' : (paper?.name || 'Other');
+      const key = paperShort(paper?.name);
       if (!map[key]) map[key] = { total: 0, done: 0 };
       map[key].total++;
       if (c.status === 'completed' || (c.completion || 0) >= 100) map[key].done++;
@@ -346,7 +600,7 @@ function OverviewTab({
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
           { label: 'Solved today', value: '0', sub: 'questions', hint: 'Keep going' },
-          { label: 'Studied today', value: formatTime(studiedMin), sub: 'active time', hint: 'Logs + focus + plan' },
+          { label: 'Studied today', value: formatTime(studiedMin), sub: 'active time', hint: 'Logs + focus + plan + watch' },
           { label: 'Streak', value: String(streak), sub: streak === 1 ? 'day' : 'days', hint: streak > 0 ? 'Your best yet' : 'Start today' },
           { label: 'Revisions due', value: String(chapters.filter(c => c.confidence === 'red' || c.confidence === 'yellow').length), sub: 'today', hint: 'Mark in Study' },
         ].map(s => (
@@ -362,13 +616,13 @@ function OverviewTab({
       <div className="grid lg:grid-cols-2 gap-4">
         <div className="rounded-2xl border border-white/10 bg-[#1E293B] p-5">
           <h3 className="text-lg font-semibold text-[#F8FAFC]">What to study next</h3>
-          <p className="text-xs text-[#64748B] mt-0.5 mb-3">From your Study chapters.</p>
+          <p className="text-xs text-[#64748B] mt-0.5 mb-3">From your plan blocks first, then Study chapters.</p>
           {studyNext.length === 0 ? (
-            <p className="text-sm text-[#64748B] py-6 text-center">No chapters yet — add them in Study.</p>
+            <p className="text-sm text-[#64748B] py-6 text-center">Add blocks in Planner or chapters in Study.</p>
           ) : (
             <div className="space-y-1">
               {studyNext.map((item, i) => (
-                <div key={item.id} className="flex items-center justify-between gap-3 rounded-xl p-3 hover:bg-white/5">
+                <div key={item.id + item.date} className="flex items-center justify-between gap-3 rounded-xl p-3 hover:bg-white/5">
                   <div className="flex gap-3 min-w-0">
                     <span className="text-xs text-[#64748B] w-4 shrink-0 pt-1">{i + 1}</span>
                     <span
@@ -383,13 +637,15 @@ function OverviewTab({
                     <div className="min-w-0">
                       <div className="text-sm font-medium text-[#F8FAFC] truncate">{item.title}</div>
                       <div className="text-xs text-[#94A3B8] mt-0.5">{item.solvedHint}</div>
-                      <span className="inline-block mt-1 rounded-full bg-[#F97316]/15 text-[#F97316] px-2 py-0.5 text-[10px] font-medium">
-                        {item.status === 'not_started' ? 'Not started' : item.status.replace('_', ' ')}
+                      <span className={`inline-block mt-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                        item.fromPlan ? 'bg-[#3B82F6]/15 text-[#3B82F6]' : 'bg-[#F97316]/15 text-[#F97316]'
+                      }`}>
+                        {item.fromPlan ? 'Plan block' : (item.status === 'not_started' ? 'Not started' : item.status.replace('_', ' '))}
                       </span>
                     </div>
                   </div>
                   <button
-                    onClick={onOpenPlanner}
+                    onClick={() => onOpenItem(item)}
                     className="shrink-0 rounded-xl bg-[#3B82F6] hover:bg-[#2563EB] px-3 py-1.5 text-xs font-medium text-white"
                   >
                     Start
@@ -402,10 +658,21 @@ function OverviewTab({
 
         <div className="rounded-2xl border border-white/10 bg-[#1E293B] p-5 flex flex-col">
           <h3 className="text-lg font-semibold text-[#F8FAFC]">Exam pace</h3>
-          <div className="text-3xl font-bold text-[#F8FAFC] mt-3">Exam in {examDays} days.</div>
-          <p className="text-sm text-[#94A3B8] mt-2 flex-1">
-            {EXAM_DATE ? `Target exam ${formatDate(EXAM_DATE)}. Plan daily blocks and mark completion to stay on pace.` : 'Set an official exam date in Settings.'}
-          </p>
+          {examDays != null && nextExam ? (
+            <>
+              <div className="text-3xl font-bold text-[#F8FAFC] mt-3">Exam in {examDays} days.</div>
+              <p className="text-sm text-[#94A3B8] mt-2 flex-1">
+                {nextExam.name} · {formatDate(nextExam.date)}. From Settings → Official exam dates (synced).
+              </p>
+            </>
+          ) : (
+            <>
+              <div className="text-xl font-bold text-[#F8FAFC] mt-3">No exam date set</div>
+              <p className="text-sm text-[#94A3B8] mt-2 flex-1">
+                Add an official exam date in Settings so countdown and pace use your real date from Supabase.
+              </p>
+            </>
+          )}
           <button
             onClick={onOpenPlanner}
             className="mt-4 w-full rounded-xl bg-[#3B82F6] hover:bg-[#2563EB] py-2.5 text-sm font-medium text-white"
@@ -442,7 +709,7 @@ function OverviewTab({
 
         <div className="rounded-2xl border border-white/10 bg-[#1E293B] p-5">
           <h3 className="text-lg font-semibold text-[#F8FAFC] mb-1">Syllabus coverage</h3>
-          <p className="text-xs text-[#64748B] mb-4">Chapters completed · mocks logged</p>
+          <p className="text-xs text-[#64748B] mb-4">Chapters completed · mocks logged (Settings + Plan)</p>
           <div className="space-y-4">
             <div>
               <div className="flex justify-between text-sm mb-1">
@@ -474,7 +741,7 @@ function OverviewTab({
 
 function PlannerTab({
   calMonth, setCalMonth, calCells, selectedDate, setSelectedDate, blocksByDate, blocksForDate,
-  dayView, setDayView, todayPct, todayTarget, todayDone, greenDays, examDays,
+  dayView, setDayView, todayPct, todayTarget, todayDone, greenDays, examDays, nextExam,
   onAdd, onEdit, onDelete, onStatus,
 }: {
   calMonth: Date;
@@ -490,7 +757,8 @@ function PlannerTab({
   todayTarget: number;
   todayDone: number;
   greenDays: number;
-  examDays: number;
+  examDays: number | null;
+  nextExam: Exam | null;
   onAdd: () => void;
   onEdit: (b: PlanBlock) => void;
   onDelete: (id: string) => void;
@@ -506,19 +774,15 @@ function PlannerTab({
           <div className="flex items-center justify-between mb-1">
             <div>
               <div className="text-sm font-semibold text-[#F8FAFC]">{monthLabel}</div>
-              <div className="text-[11px] text-[#64748B]">Exam · {examDays} days</div>
+              <div className="text-[11px] text-[#64748B]">
+                {nextExam ? `Exam · ${examDays} days` : 'No exam date in Settings'}
+              </div>
             </div>
             <div className="flex gap-1">
-              <button
-                onClick={() => setCalMonth(new Date(calMonth.getFullYear(), calMonth.getMonth() - 1, 1))}
-                className="rounded-lg p-1.5 text-[#94A3B8] hover:bg-white/5"
-              >
+              <button onClick={() => setCalMonth(new Date(calMonth.getFullYear(), calMonth.getMonth() - 1, 1))} className="rounded-lg p-1.5 text-[#94A3B8] hover:bg-white/5">
                 <ChevronLeft size={16} />
               </button>
-              <button
-                onClick={() => setCalMonth(new Date(calMonth.getFullYear(), calMonth.getMonth() + 1, 1))}
-                className="rounded-lg p-1.5 text-[#94A3B8] hover:bg-white/5"
-              >
+              <button onClick={() => setCalMonth(new Date(calMonth.getFullYear(), calMonth.getMonth() + 1, 1))} className="rounded-lg p-1.5 text-[#94A3B8] hover:bg-white/5">
                 <ChevronRight size={16} />
               </button>
             </div>
@@ -563,8 +827,8 @@ function PlannerTab({
         <div className="grid grid-cols-3 gap-2">
           {[
             { v: String(greenDays), l: 'green days' },
-            { v: '0', l: 'day streak' },
-            { v: '—', l: 'last 14 days' },
+            { v: String(Object.keys(blocksByDate).length), l: 'planned days' },
+            { v: examDays != null ? String(examDays) : '—', l: 'to exam' },
           ].map(s => (
             <div key={s.l} className="rounded-xl border border-white/10 bg-[#1E293B] px-2 py-3 text-center">
               <div className="text-lg font-bold text-[#F8FAFC]">{s.v}</div>
@@ -619,7 +883,7 @@ function PlannerTab({
             <div className="py-16 text-center">
               <Calendar size={32} className="mx-auto text-[#334155] mb-2" />
               <p className="text-sm text-[#94A3B8]">No blocks for this day</p>
-              <p className="text-xs text-[#64748B] mt-1">Tap “Add a block” to plan topics and target times.</p>
+              <p className="text-xs text-[#64748B] mt-1">Tap “Add a block” — pick subject & chapter from Study.</p>
             </div>
           ) : (
             <div className="space-y-2.5">
@@ -691,16 +955,8 @@ function ClockView({ blocks, pct }: { blocks: PlanBlock[]; pct: number }) {
       <div className="relative h-48 w-48">
         <svg viewBox="0 0 180 180" className="h-full w-full -rotate-90">
           <circle cx="90" cy="90" r={r} fill="none" stroke="#334155" strokeWidth="12" />
-          <circle
-            cx="90" cy="90" r={r} fill="none" stroke="#475569" strokeWidth="12"
-            strokeDasharray={`${(planned / 100) * circ} ${circ}`}
-            strokeLinecap="round"
-          />
-          <circle
-            cx="90" cy="90" r={r} fill="none" stroke="#22C55E" strokeWidth="12"
-            strokeDasharray={`${(done / 100) * circ} ${circ}`}
-            strokeLinecap="round"
-          />
+          <circle cx="90" cy="90" r={r} fill="none" stroke="#475569" strokeWidth="12" strokeDasharray={`${(planned / 100) * circ} ${circ}`} strokeLinecap="round" />
+          <circle cx="90" cy="90" r={r} fill="none" stroke="#22C55E" strokeWidth="12" strokeDasharray={`${(done / 100) * circ} ${circ}`} strokeLinecap="round" />
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
           <div className="text-3xl font-bold text-[#F8FAFC]">{pct}%</div>
@@ -711,9 +967,6 @@ function ClockView({ blocks, pct }: { blocks: PlanBlock[]; pct: number }) {
         <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-[#475569]" /> Planned</span>
         <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-[#22C55E]" /> Completed</span>
       </div>
-      <p className="text-[11px] text-[#64748B] mt-3 text-center max-w-xs">
-        {blocks.length} block{blocks.length === 1 ? '' : 's'} · switch to List to mark Full / Half / None
-      </p>
     </div>
   );
 }
@@ -748,10 +1001,11 @@ function HabitsTab({
       const ds = toLocalISO(d);
       const mins =
         (blocksByDate[ds] || []).reduce((s, b) => s + (b.completed_min || 0), 0) +
-        logs.filter(l => l.date === ds).reduce((s, l) => s + (l.duration_min || 0), 0);
+        logs.filter(l => l.date === ds).reduce((s, l) => s + (l.duration_min || 0), 0) +
+        sessions.filter(s => s.completed_at.startsWith(ds)).reduce((s, sess) => s + sess.duration, 0);
       return { day: d.toLocaleDateString('en-US', { weekday: 'short' }), mins };
     });
-  }, [blocksByDate, logs]);
+  }, [blocksByDate, logs, sessions]);
 
   const bestMock = mocks.length ? Math.max(...mocks.map(m => m.score)) : null;
 
@@ -778,7 +1032,8 @@ function HabitsTab({
               {calCells.map(c => {
                 const mins =
                   (blocksByDate[c.dateStr] || []).reduce((s, b) => s + (b.completed_min || 0), 0) +
-                  logs.filter(l => l.date === c.dateStr).reduce((s, l) => s + (l.duration_min || 0), 0);
+                  logs.filter(l => l.date === c.dateStr).reduce((s, l) => s + (l.duration_min || 0), 0) +
+                  sessions.filter(s => s.completed_at.startsWith(c.dateStr)).reduce((s, sess) => s + sess.duration, 0);
                 const intensity = mins === 0 ? 0 : mins < 60 ? 1 : mins < 180 ? 2 : 3;
                 const bg = ['bg-transparent', 'bg-[#3B82F6]/25', 'bg-[#3B82F6]/50', 'bg-[#3B82F6]'][intensity];
                 return (
@@ -851,14 +1106,18 @@ function HabitsTab({
 }
 
 function BlockModal({
-  open, editing, defaultDate, onClose, onSave,
+  open, editing, defaultDate, papers, chapters, onClose, onSave,
 }: {
   open: boolean;
   editing: PlanBlock | null;
   defaultDate: string;
+  papers: Paper[];
+  chapters: Chapter[];
   onClose: () => void;
   onSave: (d: Partial<PlanBlock>) => void;
 }) {
+  const [paperId, setPaperId] = useState('');
+  const [chapterId, setChapterId] = useState('');
   const [title, setTitle] = useState('');
   const [paper, setPaper] = useState('Laws');
   const [start, setStart] = useState('09:00');
@@ -868,6 +1127,8 @@ function BlockModal({
 
   useEffect(() => {
     if (open) {
+      setPaperId(editing?.paper_id || '');
+      setChapterId(editing?.chapter_id || '');
       setTitle(editing?.title || '');
       setPaper(editing?.paper || 'Laws');
       setStart(editing?.start_time || '09:00');
@@ -877,6 +1138,31 @@ function BlockModal({
     }
   }, [open, editing]);
 
+  const paperChapters = useMemo(
+    () => chapters.filter(c => !paperId || c.paper_id === paperId).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0) || a.name.localeCompare(b.name)),
+    [chapters, paperId]
+  );
+
+  const onSelectPaper = (id: string) => {
+    setPaperId(id);
+    setChapterId('');
+    const p = papers.find(x => x.id === id);
+    if (p) setPaper(paperShort(p.name));
+  };
+
+  const onSelectChapter = (id: string) => {
+    setChapterId(id);
+    const c = chapters.find(x => x.id === id);
+    if (c) {
+      setTitle(c.name);
+      const p = papers.find(x => x.id === c.paper_id);
+      if (p) {
+        setPaperId(p.id);
+        setPaper(paperShort(p.name));
+      }
+    }
+  };
+
   const auto = minutesBetween(start, end);
   const targetMin = target !== '' ? Math.max(0, +target || 0) : auto;
 
@@ -884,24 +1170,28 @@ function BlockModal({
     <Modal open={open} onClose={onClose} title={editing ? 'Edit block' : 'Add a block'}>
       <div className="space-y-3">
         <div>
-          <label className="mb-1 block text-xs font-medium text-[#94A3B8]">Topic</label>
-          <input
-            value={title}
-            onChange={e => setTitle(e.target.value)}
-            placeholder="e.g. The Limited Liability Partnership Act, 2008"
+          <label className="mb-1 block text-xs font-medium text-[#94A3B8]">Subject (from Study)</label>
+          <select
+            value={paperId}
+            onChange={e => onSelectPaper(e.target.value)}
             className="w-full rounded-xl border border-white/10 bg-[#0B1120] px-3 py-2.5 text-sm text-[#F8FAFC] outline-none focus:border-[#3B82F6]"
-          />
-        </div>
-        <div>
-          <label className="mb-1 block text-xs font-medium text-[#94A3B8]">Subject</label>
-          <div className="flex flex-wrap gap-1.5">
+          >
+            <option value="">Select paper…</option>
+            {papers.map(p => (
+              <option key={p.id} value={p.id}>{p.name} ({p.level})</option>
+            ))}
+          </select>
+          {papers.length === 0 && (
+            <p className="text-[10px] text-[#F97316] mt-1">No papers yet — add them in Study, or use short tags below.</p>
+          )}
+          <div className="flex flex-wrap gap-1.5 mt-2">
             {['Acc', 'Laws', 'QA', 'Econ'].map(p => (
               <button
                 key={p}
                 type="button"
-                onClick={() => setPaper(p)}
+                onClick={() => { setPaper(p); setPaperId(''); }}
                 className={`rounded-full px-3 py-1 text-xs font-medium border ${
-                  paper === p ? 'border-[#3B82F6] bg-[#3B82F6]/20 text-[#3B82F6]' : 'border-white/10 text-[#94A3B8]'
+                  paper === p && !paperId ? 'border-[#3B82F6] bg-[#3B82F6]/20 text-[#3B82F6]' : 'border-white/10 text-[#94A3B8]'
                 }`}
               >
                 {p}
@@ -909,6 +1199,31 @@ function BlockModal({
             ))}
           </div>
         </div>
+
+        <div>
+          <label className="mb-1 block text-xs font-medium text-[#94A3B8]">Chapter (from Study)</label>
+          <select
+            value={chapterId}
+            onChange={e => onSelectChapter(e.target.value)}
+            className="w-full rounded-xl border border-white/10 bg-[#0B1120] px-3 py-2.5 text-sm text-[#F8FAFC] outline-none focus:border-[#3B82F6]"
+          >
+            <option value="">Select chapter…</option>
+            {paperChapters.map(c => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="mb-1 block text-xs font-medium text-[#94A3B8]">Topic title</label>
+          <input
+            value={title}
+            onChange={e => setTitle(e.target.value)}
+            placeholder="Auto-filled from chapter, or type your own"
+            className="w-full rounded-xl border border-white/10 bg-[#0B1120] px-3 py-2.5 text-sm text-[#F8FAFC] outline-none focus:border-[#3B82F6]"
+          />
+        </div>
+
         <div className="grid grid-cols-2 gap-2">
           <div>
             <label className="mb-1 block text-xs font-medium text-[#94A3B8]">Start</label>
@@ -927,7 +1242,6 @@ function BlockModal({
             onChange={e => setTarget(e.target.value)}
             className="w-full rounded-xl border border-white/10 bg-[#0B1120] px-3 py-2.5 text-sm text-[#F8FAFC] outline-none focus:border-[#3B82F6]"
           />
-          <p className="text-[10px] text-[#64748B] mt-1">From times: {formatTime(auto)}</p>
         </div>
         <div>
           <label className="mb-1 block text-xs font-medium text-[#94A3B8]">Notes</label>
@@ -936,7 +1250,8 @@ function BlockModal({
         <button
           onClick={() => onSave({
             date: editing?.date || defaultDate,
-            title, paper, start_time: start, end_time: end, target_min: targetMin, notes,
+            title, paper, paper_id: paperId, chapter_id: chapterId,
+            start_time: start, end_time: end, target_min: targetMin, notes,
             completed_min: editing?.completed_min || 0,
             status: editing?.status || '',
           })}

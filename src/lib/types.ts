@@ -203,6 +203,8 @@ export interface PlanBlock {
   end_time: string;
   title: string;
   paper: string;
+  paper_id?: string;
+  chapter_id?: string;
   target_min: number;
   completed_min: number;
   status: 'full' | 'half' | 'none' | 'custom' | '';
