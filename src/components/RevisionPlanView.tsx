@@ -821,7 +821,7 @@ function HabitsTab({
                 <Tooltip
                   contentStyle={{ background: '#1E293B', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }}
                   labelStyle={{ color: '#94A3B8' }}
-                  formatter={(v: number) => [formatTime(v), 'Studied']}
+                  formatter={(v) => [formatTime(Number(v ?? 0)), 'Studied']}
                 />
                 <Bar dataKey="mins" fill="#3B82F6" radius={[6, 6, 0, 0]} />
               </BarChart>
