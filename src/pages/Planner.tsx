@@ -332,9 +332,9 @@ export default function Planner() {
         </button>
       </div>
 
-      <div className="flex gap-1 rounded-xl border border-[rgba(255,236,200,0.07)] bg-[#1E1B16]/90 p-1 w-fit">
+      <div className="y-tabs-scroll rounded-xl border border-[rgba(255,236,200,0.07)] bg-[#1E1B16]/90 p-1">
         {(['day','week','month','life','plan'] as ViewMode[]).map(v => (
-          <button key={v} onClick={() => setView(v)} className={`rounded-lg px-4 py-1.5 text-sm font-medium capitalize transition-colors ${view === v ? 'bg-[#E8B86D] text-black' : 'text-[#A8A29A] hover:text-[#EDE6DA]'}`}>{v}</button>
+          <button key={v} onClick={() => setView(v)} className={`shrink-0 rounded-lg px-4 py-2 text-sm font-medium capitalize transition-colors ${view === v ? 'bg-[#E8B86D] text-black' : 'text-[#A8A29A] hover:text-[#EDE6DA]'}`}>{v}</button>
         ))}
       </div>
 

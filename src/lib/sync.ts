@@ -113,7 +113,8 @@ export async function doSync() {
 /**
  * Pull cloud → local.
  * - Upserts newer remote rows
- * - Removes local rows that were deleted on another device (synced only; pending local kept)
+ * - Only removes local rows when remote has data AND an id is missing
+ *   (never wipe local when remote returns [] — that often means RLS blocking the anon key)
  */
 export async function pullFromCloud(): Promise<boolean> {
   if (!navigator.onLine) return false;
@@ -137,20 +138,25 @@ export async function pullFromCloud(): Promise<boolean> {
 
         if (!data) continue;
 
+        // CRITICAL: empty remote must NOT delete local rows.
+        // With RLS on + no auth session, Supabase returns [] and used to wipe the device.
+        if (data.length === 0) {
+          console.log(`[sync] ${table}: remote empty (skip delete reconcile)`);
+          continue;
+        }
+
+        anyData = true;
         const remoteIds = new Set(data.map((row: any) => row.id));
 
-        // Drop local copies deleted on another device (only already-synced rows)
+        // Only when we actually received remote rows: drop local synced rows missing remotely
         const localRows = await db.table(table).toArray();
         for (const local of localRows) {
           const status = (local as any).sync_status;
-          if (status === 'pending') continue; // not uploaded yet — keep
+          if (status === 'pending') continue;
           if (!remoteIds.has((local as any).id)) {
             await db.table(table).delete((local as any).id);
           }
         }
-
-        if (data.length === 0) continue;
-        anyData = true;
 
         for (const row of data) {
           const existing = await db.table(table).get(row.id);
@@ -164,7 +170,6 @@ export async function pullFromCloud(): Promise<boolean> {
               ).getTime()
             : 0;
 
-          // Prefer newer remote; never overwrite pending local edits with older cloud data
           if (existing && (existing as any).sync_status === 'pending' && localTime > remoteTime) {
             continue;
           }
